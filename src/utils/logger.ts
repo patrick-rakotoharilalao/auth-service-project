@@ -37,9 +37,13 @@ winston.addColors(colors);
 // Format personnalisé
 const format = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-    winston.format.printf(
-        (info) => `${info.timestamp} ${info.level}: ${info.message}`,
-    ),
+    winston.format.splat(),
+    winston.format.printf((info) => {
+        const { timestamp, level, message, ...meta } = info;
+
+        return `${timestamp} ${level}: ${message}${Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : ''
+            }`;
+    })
 );
 
 // Transports (destinations des logs)

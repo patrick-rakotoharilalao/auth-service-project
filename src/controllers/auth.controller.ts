@@ -104,7 +104,7 @@ export const login = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            // Timing constant pour éviter les attaques temporelles
+            // Constant timing to avoid time attacks
             await bcrypt.compare(password, '$2b$10$fakehashforconstanttime'); // Hash factice
 
             logger.warn('Login attempt with non-existent email', {
@@ -137,6 +137,7 @@ export const login = async (req: Request, res: Response) => {
             }
         });
 
+
         if (activeSessions >= TOKEN_CONFIG.MAX_SESSIONS_PER_USER) {
             const oldestSession = await prisma.session.findFirst({
                 where: {
@@ -154,6 +155,23 @@ export const login = async (req: Request, res: Response) => {
                     data: { revoked: true }
                 });
             }
+        }
+
+        const sameSession = await prisma.session.findFirst({
+            where: {
+                userId: user.id,
+                deviceInfo: req.headers['user-agent'] || 'unknown',
+                revoked: false,
+                expiresAt: { gt: new Date() }
+            }
+        });
+
+        if (sameSession) {
+            await prisma.session.update({
+                where: { id: sameSession.id },
+                data: { revoked: true }
+            });
+            await redisService.del(`refreshToken:${sameSession.tokenHash}`);
         }
 
         // Generate JWT token
@@ -176,7 +194,7 @@ export const login = async (req: Request, res: Response) => {
         // Generate refresh token
         const refreshToken = crypto.randomBytes(TOKEN_CONFIG.REFRESH_TOKEN_LENGTH).toString('hex');
         const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
-        const refreshTokenExpiryMs = TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 100
+        const refreshTokenExpiryMs = TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
         const expiresAt = new Date(Date.now() + refreshTokenExpiryMs);
         // store refresh token in Redis
         await redisService.set(
@@ -206,7 +224,7 @@ export const login = async (req: Request, res: Response) => {
             userId: user.id,
             sessionId: session.id,
             ip: req.ip,
-            device: await getDeviceInfo(req) // Fonction à implémenter
+            device: await getDeviceInfo(req)
         });
 
         // Successful login
@@ -228,8 +246,8 @@ export const login = async (req: Request, res: Response) => {
             ip: req.ip
         });
 
-        // Ne pas révéler d'information sensible
-        res.status(500).json({
+        // Do not disclose sensitive information
+        return res.status(500).json({
             success: false,
             message: 'Authentication failed'
         });
