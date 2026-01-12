@@ -109,7 +109,7 @@ export const login = async (req: Request, res: Response) => {
 
             logger.warn('Login attempt with non-existent email', {
                 email: emailNormalized,
-                ip: req.ip
+                ip: req.ip // req.socket.remoteAddress if IPV4 needed
             });
 
             return res.status(401).json({
@@ -224,7 +224,7 @@ export const login = async (req: Request, res: Response) => {
             userId: user.id,
             sessionId: session.id,
             ip: req.ip,
-            device: await getDeviceInfo(req)
+            device: req.headers['user-agent'] || 'unknown',
         });
 
         // Successful login
@@ -253,7 +253,3 @@ export const login = async (req: Request, res: Response) => {
         });
     }
 };
-
-async function getDeviceInfo(req: Request): Promise<string> {
-    return req.headers['user-agent'] || 'unknown';
-}
