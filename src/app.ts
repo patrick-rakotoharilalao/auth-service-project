@@ -4,8 +4,11 @@ import authRoutes from './routes/auth.routes';
 import prisma from './lib/prisma';
 import { redisService } from './services/redis.services';
 const app = express();
+import cookieParser from 'cookie-parser';
 
 app.use(express.json());
+
+app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
 

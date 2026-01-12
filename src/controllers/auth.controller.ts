@@ -8,7 +8,7 @@ import { AuthService } from '../services/auth.services';
 import { redisService } from '../services/redis.services';
 import logger from '../utils/logger';
 
-const REDIS_TTL = process.env.REDIS_TTL ? parseInt(process.env.REDIS_TTL) : 30;
+const REDIS_TTL = process.env.REDIS_TTL_DAYS ? parseInt(process.env.REDIS_TTL_DAYS) : 30;
 const REFRESH_TOKEN_EXPIRY_SECONDS = REDIS_TTL * 24 * 60 * 60; // 30 days
 
 const TOKEN_CONFIG = {
@@ -174,28 +174,12 @@ export const login = async (req: Request, res: Response) => {
             await redisService.del(`refreshToken:${sameSession.tokenHash}`);
         }
 
-        // Generate JWT token
-        const JWT_SECRET = process.env.JWT_SECRET;
-        const payload = { userId: user.id, email: user.email };
-
-        if (!JWT_SECRET) {
-            logger.error('JWT_SECRET is not configured');
-            throw new Error('Server configuration error');
-        }
-        const token = jwt.sign(
-            payload,
-            JWT_SECRET,
-            {
-                expiresIn: TOKEN_CONFIG.ACCESS_TOKEN_EXPIRY,
-                algorithm: 'HS256'
-            }
-        );
-
         // Generate refresh token
         const refreshToken = crypto.randomBytes(TOKEN_CONFIG.REFRESH_TOKEN_LENGTH).toString('hex');
         const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
         const refreshTokenExpiryMs = TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
         const expiresAt = new Date(Date.now() + refreshTokenExpiryMs);
+
         // store refresh token in Redis
         await redisService.set(
             `refreshToken:${refreshTokenHash}`,
@@ -227,14 +211,37 @@ export const login = async (req: Request, res: Response) => {
             device: req.headers['user-agent'] || 'unknown',
         });
 
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+            sameSite: 'none'
+        });
+
+        // Generate JWT token
+        const JWT_SECRET = process.env.JWT_SECRET;
+        const payload = { userId: user.id, email: user.email, sessionId: session.id };
+
+        if (!JWT_SECRET) {
+            logger.error('JWT_SECRET is not configured');
+            throw new Error('Server configuration error');
+        }
+        const token = jwt.sign(
+            payload,
+            JWT_SECRET,
+            {
+                expiresIn: TOKEN_CONFIG.ACCESS_TOKEN_EXPIRY,
+                algorithm: 'HS256'
+            }
+        );
+
         // Successful login
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Login successful',
             data: {
                 user: { userId: user.id, email: user.email },
                 accessToken: token,
-                refreshToken: refreshToken,
                 sessionId: session.id
             }
         });
@@ -253,3 +260,77 @@ export const login = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * Logout user
+ * @param req 
+ * @param res 
+ */
+export const logout = async (req: Request, res: Response) => {
+    try {
+
+        // blacklist the access and refresh token in Redis and mark session as revoked in DB 
+        logger.info('Logout request received', {
+            ip: req.ip,
+            userAgent: req.headers['user-agent'] || 'unknown',
+        });
+
+        // for access token, 24 hours TTL
+        const accessToken = req.headers.authorization?.split(' ')[1];
+        if (!accessToken) {
+            return res.status(400).json({
+                success: false,
+                message: 'Access token is required for logout'
+            });
+        }
+
+        const accessTokenDecoded = jwt.decode(accessToken) as any;
+        const sessionId = accessTokenDecoded?.sessionId;
+        if (!sessionId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid access token'
+            });
+        }
+        await AuthService.revokeToken(accessToken, 'access');
+
+        // for refresh token, TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS TTL
+        const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) {
+            return res.status(400).json({
+                success: false,
+                message: 'Refresh token is required for logout'
+            });
+        }
+        await AuthService.revokeToken(refreshToken, 'refresh');
+
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'none'
+        });
+
+        // Then revoke the session in DB with refreshToken
+        await prisma.session.update({
+            where: { id: sessionId },
+            data: { revoked: true }
+        });
+
+        // Return success response
+        return res.status(200).json({
+            success: true,
+            message: 'Logout successful'
+        });
+
+    } catch (error: any) {
+        logger.error('Logout error', {
+            error: error.message,
+            stack: error.stack,
+            ip: req.ip
+        });
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+}

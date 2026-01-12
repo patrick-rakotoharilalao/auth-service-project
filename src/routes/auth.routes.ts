@@ -1,6 +1,6 @@
 // auth.routes.ts
 import { body } from "express-validator";
-import { login, register } from "../controllers/auth.controller";
+import { login, register, logout } from "../controllers/auth.controller";
 import { Router } from "express";
 
 const router = Router();
@@ -18,7 +18,9 @@ router.post("/register", [
 router.post("/login", [
     body('email').isEmail().withMessage('Invalid email'),
     body('password').notEmpty().withMessage('Password is required'),
-    // rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }) 
+    // rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }) // to implement later
 ], login);
+
+router.post("/logout", logout);
 
 export default router;
