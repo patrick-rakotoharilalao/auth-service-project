@@ -51,10 +51,14 @@ const transports = [
     // Console avec couleur
     new winston.transports.Console({
         format: winston.format.combine(
-            winston.format.colorize({ all: true }),
-            winston.format.printf(
-                (info) => `${info.timestamp} ${info.level}: ${info.message}`,
-            ),
+            winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+            winston.format.splat(),
+            winston.format.printf((info) => {
+                const { timestamp, level, message, ...meta } = info;
+
+                return `${timestamp} ${level}: ${message}${Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : ''
+                    }`;
+            })
         ),
     }),
 
