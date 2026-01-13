@@ -7,12 +7,14 @@ import crypto from 'crypto';
 import { AuthService } from '../services/auth.services';
 import { redisService } from '../services/redis.services';
 import logger from '../utils/logger';
+import { StringValue } from 'ms'
 
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL ? (process.env.ACCESS_TOKEN_TTL as StringValue) : '15m';
 const REDIS_TTL = process.env.REDIS_TTL_DAYS ? parseInt(process.env.REDIS_TTL_DAYS) : 30;
 const REFRESH_TOKEN_EXPIRY_SECONDS = REDIS_TTL * 24 * 60 * 60; // 30 days
 
 const TOKEN_CONFIG = {
-    ACCESS_TOKEN_EXPIRY: '15m' as const,
+    ACCESS_TOKEN_EXPIRY: ACCESS_TOKEN_TTL,
     REFRESH_TOKEN_EXPIRY_DAYS: REDIS_TTL,
     MAX_SESSIONS_PER_USER: 5, // Limite de sessions simultanées
     REFRESH_TOKEN_LENGTH: 64 // Longueur du token en bytes
@@ -276,16 +278,10 @@ export const logout = async (req: Request, res: Response) => {
         });
 
         // for access token, 24 hours TTL
-        const accessToken = req.headers.authorization?.split(' ')[1];
-        if (!accessToken) {
-            return res.status(400).json({
-                success: false,
-                message: 'Access token is required for logout'
-            });
-        }
+        const accessToken = (req as any).accessToken; // already verified in authenticate middleware
+        const user = (req as any).user; // from authenticate middleware
 
-        const accessTokenDecoded = jwt.decode(accessToken) as any;
-        const sessionId = accessTokenDecoded?.sessionId;
+        const sessionId = user?.sessionId;
         if (!sessionId) {
             return res.status(400).json({
                 success: false,
@@ -304,16 +300,16 @@ export const logout = async (req: Request, res: Response) => {
         }
         await AuthService.revokeToken(refreshToken, 'refresh');
 
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'none'
-        });
-
         // Then revoke the session in DB with refreshToken
         await prisma.session.update({
             where: { id: sessionId },
             data: { revoked: true }
+        });
+
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'none'
         });
 
         // Return success response

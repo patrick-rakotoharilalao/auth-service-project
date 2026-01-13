@@ -2,6 +2,7 @@
 import { body } from "express-validator";
 import { login, register, logout } from "../controllers/auth.controller";
 import { Router } from "express";
+import { authenticate } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -21,6 +22,6 @@ router.post("/login", [
     // rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }) // to implement later
 ], login);
 
-router.post("/logout", logout);
+router.post("/logout", authenticate, logout);
 
 export default router;
