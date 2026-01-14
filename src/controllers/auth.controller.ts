@@ -1,26 +1,14 @@
-import prisma from '../lib/prisma';
-import { request, Request, Response } from 'express';
-import { validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { Request, Response } from 'express';
+import { validationResult } from 'express-validator';
+import jwt from 'jsonwebtoken';
+import { envConfig, tokenConversions } from '../config/env.config';
+import prisma from '../lib/prisma';
 import { AuthService } from '../services/auth.services';
 import { redisService } from '../services/redis.services';
 import logger from '../utils/logger';
-import { StringValue } from 'ms'
 
-const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL ? (process.env.ACCESS_TOKEN_TTL as StringValue) : '15m';
-const REDIS_TTL = process.env.REDIS_TTL_DAYS ? parseInt(process.env.REDIS_TTL_DAYS) : 30;
-const REFRESH_TOKEN_EXPIRY_SECONDS = REDIS_TTL * 24 * 60 * 60; // 30 days
-const RESET_PASSWORD_TOKEN_TTL_HOURS = process.env.RESET_PASSWORD_TOKEN_TTL_HOURS ? Number(process.env.RESET_PASSWORD_TOKEN_TTL_HOURS) : 1;
-
-const TOKEN_CONFIG = {
-    ACCESS_TOKEN_EXPIRY: ACCESS_TOKEN_TTL,
-    REFRESH_TOKEN_EXPIRY_DAYS: REDIS_TTL,
-    MAX_SESSIONS_PER_USER: 5, // Limite de sessions simultanées
-    REFRESH_TOKEN_LENGTH: 64, // Longueur du token en bytes
-    RESET_PASSWORD_EXPIRY_TTL_HOURS: RESET_PASSWORD_TOKEN_TTL_HOURS
-};
 
 /**
  *  Register a new user
@@ -150,7 +138,7 @@ export const login = async (req: Request, res: Response) => {
         });
 
 
-        if (activeSessions >= TOKEN_CONFIG.MAX_SESSIONS_PER_USER) {
+        if (activeSessions >= envConfig.tokenConfig.maxSessionPerUser) {
             const oldestSession = await prisma.session.findFirst({
                 where: {
                     userId: user.id,
@@ -187,10 +175,9 @@ export const login = async (req: Request, res: Response) => {
         }
 
         // Generate refresh token
-        const refreshToken = crypto.randomBytes(TOKEN_CONFIG.REFRESH_TOKEN_LENGTH).toString('hex');
+        const refreshToken = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
         const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
-        const refreshTokenExpiryMs = TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-        const expiresAt = new Date(Date.now() + refreshTokenExpiryMs);
+        const expiresAt = new Date(Date.now() + tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds);
 
         // store refresh token in Redis
         await redisService.set(
@@ -202,7 +189,7 @@ export const login = async (req: Request, res: Response) => {
                 ip: req.ip,
                 issuedAt: Date.now()
             },
-            TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
+            tokenConversions.REFRESH_TOKEN_EXPIRY.seconds
         );
 
         // create session in DB
@@ -211,7 +198,7 @@ export const login = async (req: Request, res: Response) => {
                 userId: user.id,
                 tokenHash: refreshTokenHash,
                 deviceInfo: req.headers['user-agent'] || 'unknown',
-                expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_SECONDS * 1000), // 30 days
+                expiresAt: new Date(Date.now() + tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds), // 30 days
                 revoked: false
             }
         });
@@ -225,24 +212,19 @@ export const login = async (req: Request, res: Response) => {
 
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+            secure: envConfig.serverConfig.nodeEnv === 'production',
+            maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
             sameSite: 'none'
         });
 
         // Generate JWT token
-        const JWT_SECRET = process.env.JWT_SECRET;
         const payload = { userId: user.id, email: user.email, sessionId: session.id };
 
-        if (!JWT_SECRET) {
-            logger.error('JWT_SECRET is not configured');
-            throw new Error('Server configuration error');
-        }
         const token = jwt.sign(
             payload,
-            JWT_SECRET,
+            envConfig.serverConfig.jwtSecret,
             {
-                expiresIn: TOKEN_CONFIG.ACCESS_TOKEN_EXPIRY,
+                expiresIn: envConfig.tokenConfig.accessTokenTTL,
                 algorithm: 'HS256'
             }
         );
@@ -339,7 +321,7 @@ export const logout = async (req: Request, res: Response) => {
         // Clear refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: envConfig.serverConfig.nodeEnv === 'production',
             sameSite: 'none'
         });
 
@@ -404,7 +386,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
         }
 
         // Generate secure token
-        const token = crypto.randomBytes(TOKEN_CONFIG.REFRESH_TOKEN_LENGTH).toString('hex');
+        const token = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
         const tokenHashed = await bcrypt.hash(token, 12);
 
         // Mark all previous password resets as used
@@ -414,11 +396,10 @@ export const forgotPassword = async (req: Request, res: Response) => {
         });
 
         // Store new reset token
-        const tokenExpiryMs = TOKEN_CONFIG.RESET_PASSWORD_EXPIRY_TTL_HOURS * 60 * 60 * 1000;
-        const newResetPassword = await prisma.passwordResets.create({
+        await prisma.passwordResets.create({
             data: {
                 tokenHash: tokenHashed,
-                expiresAt: new Date(Date.now() + tokenExpiryMs),
+                expiresAt: new Date(Date.now() + tokenConversions.RESET_PASSWORD_TOKEN.miliseconds),
                 userId: user.id,
                 used: false
             },
@@ -460,7 +441,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
 export const resetPassword = async (req: Request, res: Response) => {
     try {
-        // 1️⃣ Validation des inputs
+        // Validation des inputs
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.warn('Validation errors during password reset', { errors: errors.array() });
@@ -530,3 +511,149 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
     }
 };
+
+export const refreshToken = async (req: Request, res: Response) => {
+    try {
+        const accessTokenExpired = req.body.accessToken;
+
+        if (!accessTokenExpired) {
+            logger.warn('Access token missing in refresh token request');
+            return res.status(400).json({
+                success: false,
+                message: 'Access token is required'
+            });
+        }
+
+        const payload = jwt.decode(accessTokenExpired) as any;
+
+        if (!payload || !payload.sessionId) {
+            logger.warn('Access token invalid or malformed');
+            return res.status(400).json({
+                success: false,
+                message: 'Access token invalid'
+            });
+        }
+
+        const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) {
+            logger.warn('Refresh token missing in cookie');
+            return res.status(400).json({
+                success: false,
+                message: 'Refresh token is required'
+            });
+        }
+
+        // Verify refresh token in DB
+        const session = await prisma.session.findUnique({
+            where: { id: payload.sessionId },
+            select: {
+                id: true,
+                userId: true,
+                tokenHash: true,
+                revoked: true,
+                createdAt: true,
+                user: true
+            }
+        });
+
+        if (!session) {
+            logger.warn('Session not found during refresh token');
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid refresh token'
+            });
+        }
+
+        if (session.revoked) {
+            logger.warn('Revoked session used during refresh token', { sessionId: session.id });
+            return res.status(401).json({
+                success: false,
+                message: 'Session revoked'
+            });
+        }
+
+        // Verify that token matches the one in session
+        const tokenMatched = await bcrypt.compare(refreshToken, session.tokenHash);
+        if (!tokenMatched) {
+            logger.error('Refresh token does not match token hash in DB', {
+                sessionId: session.id
+            });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid refresh token'
+            });
+        }
+
+        // Verify refresh token blacklist
+        const blacklisted = await redisService.get(`blacklist:${refreshToken}`);
+        if (blacklisted) {
+            logger.warn('Blacklisted refresh token used', { sessionId: session.id });
+            return res.status(401).json({
+                success: false,
+                message: 'Refresh token invalid or expired'
+            });
+        }
+
+        // Verify refresh token TTL in Redis
+        const refreshTokenTTL = await redisService.ttl(`refreshToken:${session.tokenHash}`);
+        if (refreshTokenTTL === -2) {
+            logger.warn('Refresh token expired in Redis', { sessionId: session.id });
+            return res.status(401).json({
+                success: false,
+                message: 'Refresh token expired or invalid'
+            });
+        }
+
+        if (refreshTokenTTL === -1) {
+            logger.error('Refresh token has no TTL in Redis', {
+                sessionId: session.id
+            });
+            return res.status(500).json({
+                success: false,
+                message: 'Invalid refresh token configuration'
+            });
+        }
+
+        // Generate a new access token
+        const newPayload = {
+            userId: session.userId,
+            email: session.user.email,
+            sessionId: session.id
+        };
+
+        const newAccessToken = jwt.sign(
+            newPayload,
+            envConfig.serverConfig.jwtSecret,
+            {
+                expiresIn: envConfig.tokenConfig.accessTokenTTL,
+                algorithm: 'HS256'
+            }
+        );
+
+        // Blacklist old access token and refresh token
+        await AuthService.revokeToken(accessTokenExpired, 'access');
+
+        logger.info('Access token refreshed successfully', {
+            sessionId: session.id,
+            userId: session.userId
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Access token refreshed successfully',
+            accessToken: newAccessToken
+        });
+
+    } catch (error: any) {
+        logger.error('Refresh token error', {
+            error: error.message,
+            stack: error.stack
+        });
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+

@@ -1,7 +1,5 @@
 import { createClient, RedisClientType } from 'redis';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { envConfig } from './env.config';
 
 export interface RedisConfig {
     host: string;
@@ -17,10 +15,10 @@ class RedisConnection {
 
     private constructor() {
         const config: RedisConfig = {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-            password: process.env.REDIS_PASSWORD || undefined,
-            db: parseInt(process.env.REDIS_DB || '0')
+            host: envConfig.redisConfig.host,
+            port: envConfig.redisConfig.port,
+            password: envConfig.redisConfig.password,
+            db: envConfig.redisConfig.db
         };
 
         this.client = createClient({
@@ -53,7 +51,7 @@ class RedisConnection {
         });
 
         this.client.on('reconnecting', () => {
-            console.log('🔄 Redis reconnecting...');
+            console.log('Redis reconnecting...');
         });
     }
 
