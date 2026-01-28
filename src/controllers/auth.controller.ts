@@ -29,37 +29,9 @@ export const register = async (req: Request, res: Response) => {
         }
 
         const { email, password } = req.body;
-        const emailNormalized = email.toLowerCase();
-
-        // Check email not already in DB
-        const existingUser = await prisma.user.findUnique({
-            where: { emailNormalized },
-        });
-
-        if (existingUser) {
-            logger.warn(`Email already in use during registration: ${email}`);
-            return res.status(400).json({
-                success: false,
-                message: 'Email already in use'
-            });
-        }
-
-        // Hash password with bcrypt
-        const saltRounds = process.env.BCRYPT_SALT_ROUNDS ? parseInt(process.env.BCRYPT_SALT_ROUNDS) : 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // Create user in DB
-        const newUser = await prisma.user.create({
-            data: {
-                email,
-                passwordHash: hashedPassword,
-                emailNormalized
-            },
-            select: {
-                id: true,
-                email: true
-            }
-        });
+        const newUser = await AuthService.createUser(email, password);
 
         logger.info('User registered successfully', { userId: newUser.id, email });
 
@@ -70,10 +42,17 @@ export const register = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
+        if (error.message === 'Email already in use') {
+            return res.status(400).json({
+                success: false,
+                message: 'Email already in use',
+            });
+        }
+
         logger.error('Registration error', { error: error.message, stack: error.stack });
         return res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Internal server error',
         });
     }
 };
@@ -96,121 +75,16 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const { email, password } = req.body;
-        const emailNormalized = email.toLowerCase();
-
-        // Verify email and password
-        const user = await prisma.user.findUnique({
-            where: { emailNormalized: emailNormalized },
-        });
-
-        if (!user) {
-            // Constant timing to avoid time attacks
-            await bcrypt.compare(password, '$2b$10$fakehashforconstanttime'); // Hash factice
-
-            logger.warn('Login attempt with non-existent email', {
-                email: emailNormalized,
-                ip: req.ip // req.socket.remoteAddress if IPV4 needed
-            });
-
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
-
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-
-        if (!passwordMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-
-        }
-
-        // Verify limit sessions
-        const activeSessions = await prisma.session.count({
-            where: {
-                userId: user.id,
-                revoked: false,
-                expiresAt: { gt: new Date() }
-            }
-        });
-
-
-        if (activeSessions >= envConfig.tokenConfig.maxSessionPerUser) {
-            const oldestSession = await prisma.session.findFirst({
-                where: {
-                    userId: user.id,
-                    revoked: false
-                },
-                orderBy: { createdAt: 'asc' },
-                select: { tokenHash: true }
-            });
-
-            if (oldestSession) {
-                await redisService.del(`refreshToken:${oldestSession.tokenHash}`);
-                await prisma.session.update({
-                    where: { tokenHash: oldestSession.tokenHash },
-                    data: { revoked: true }
-                });
-            }
-        }
-
-        const sameSession = await prisma.session.findFirst({
-            where: {
-                userId: user.id,
-                deviceInfo: req.headers['user-agent'] || 'unknown',
-                revoked: false,
-                expiresAt: { gt: new Date() }
-            }
-        });
-
-        if (sameSession) {
-            await prisma.session.update({
-                where: { id: sameSession.id },
-                data: { revoked: true }
-            });
-            await redisService.del(`refreshToken:${sameSession.tokenHash}`);
-        }
-
-        // Generate refresh token
-        const refreshToken = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
-        const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
-        const expiresAt = new Date(Date.now() + tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds);
-
-        // store refresh token in Redis
-        await redisService.set(
-            `refreshToken:${refreshTokenHash}`,
-            {
-                userId: user.id,
-                email: user.email,
-                expiresAt: expiresAt,
-                ip: req.ip,
-                issuedAt: Date.now()
-            },
-            tokenConversions.REFRESH_TOKEN_EXPIRY.seconds
-        );
-
-        // create session in DB
-        const session = await prisma.session.create({
-            data: {
-                userId: user.id,
-                tokenHash: refreshTokenHash,
-                deviceInfo: req.headers['user-agent'] || 'unknown',
-                expiresAt: new Date(Date.now() + tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds), // 30 days
-                revoked: false
-            }
-        });
+        const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
 
         logger.info('User logged in successfully', {
-            userId: user.id,
-            sessionId: session.id,
+            userId: loginData.user.id,
+            sessionId: loginData.session.id,
             ip: req.ip,
             device: req.headers['user-agent'] || 'unknown',
         });
 
-        res.cookie('refreshToken', refreshToken, {
+        res.cookie('refreshToken', loginData.refreshToken, {
             httpOnly: true,
             secure: envConfig.serverConfig.nodeEnv === 'production',
             maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
@@ -218,37 +92,32 @@ export const login = async (req: Request, res: Response) => {
             path: '/'
         });
 
-        res.cookie('sessionId', session.id, {
+        res.cookie('sessionId', loginData.session.id, {
             httpOnly: true,
             secure: envConfig.serverConfig.nodeEnv === 'production',
             maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
             sameSite: envConfig.serverConfig.nodeEnv === 'production' ? 'none' : 'lax',
             path: '/'
         });
-
-        // Generate JWT token
-        const payload = { userId: user.id, email: user.email, sessionId: session.id };
-
-        const token = jwt.sign(
-            payload,
-            envConfig.serverConfig.jwtSecret,
-            {
-                expiresIn: envConfig.tokenConfig.accessTokenTTL,
-                algorithm: 'HS256'
-            }
-        );
 
         // Successful login
         return res.status(200).json({
             success: true,
             message: 'Login successful',
             data: {
-                user: { userId: user.id, email: user.email },
-                accessToken: token,
-                sessionId: session.id
+                user: { userId: loginData.user.id, email: loginData.user.email },
+                accessToken: loginData.accessToken,
+                sessionId: loginData.session.id
             }
         });
     } catch (error: any) {
+        if (error.message === 'Invalid email or password') {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password'
+            });
+        }
+
         logger.error('Login error', {
             error: error.message,
             stack: error.stack,
