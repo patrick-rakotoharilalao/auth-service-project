@@ -57,7 +57,7 @@ export class AuthService {
         }
     }
 
-    static async loginUser(email: string, password: string, context: {ip: string; userAgent: string}) {
+    static async loginUser(email: string, password: string, context: { ip: string; userAgent: string }) {
         try {
             const user = await this.verifyCredentials(email, password);
             await this.enforceSessionLimits(user);
@@ -72,7 +72,7 @@ export class AuthService {
         }
     }
 
-    static async verifyCredentials(email: string, password: string): Promise<User> {
+    private static async verifyCredentials(email: string, password: string): Promise<User> {
 
         const emailNormalized = email.toLowerCase();
         // Attempt to find user by email
@@ -95,7 +95,7 @@ export class AuthService {
         return user;
     }
 
-    static async enforceSessionLimits(user: User) {
+    private static async enforceSessionLimits(user: User) {
         const activeSessions = await prisma.session.count({
             where: {
                 userId: user.id,
@@ -126,7 +126,7 @@ export class AuthService {
 
     }
 
-    static async revokeSameDeviceSession(userId: string, device: string) {
+    private static async revokeSameDeviceSession(userId: string, device: string) {
         const sameSession = await prisma.session.findFirst({
             where: {
                 userId: userId,
@@ -145,7 +145,7 @@ export class AuthService {
         }
     }
 
-    static async issueRefreshToken(user: User, ip: string) {
+    private static async issueRefreshToken(user: User, ip: string) {
         // Generate refresh token
         const refreshToken = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
         const refreshTokenHash = await bcrypt.hash(refreshToken, 12);
@@ -167,7 +167,7 @@ export class AuthService {
         return { refreshToken, refreshTokenHash };
     }
 
-    static async createSession(userId: string, refreshTokenHash: string, device: string) {
+    private static async createSession(userId: string, refreshTokenHash: string, device: string) {
 
         // create session in DB
         const session = await prisma.session.create({
@@ -183,7 +183,7 @@ export class AuthService {
         return session;
     }
 
-    static generateAccessToken(user: User, sessionId: string) {
+    private static generateAccessToken(user: User, sessionId: string) {
 
         const payload = { userId: user.id, email: user.email, sessionId: sessionId };
 
@@ -197,6 +197,33 @@ export class AuthService {
         );
 
         return accessToken;
+    }
+
+
+    static async revokingData(sessionId: string, accessToken: string, refreshToken: string) {
+        // revoke access token
+        try {
+            await AuthService.revokeToken(accessToken, 'access');
+        } catch (err) {
+            throw new Error('Failed to revoke access token');
+        }
+
+        // revoke refresh token
+        try {
+            await AuthService.revokeToken(refreshToken, 'refresh');
+        } catch (err) {
+            throw new Error('Failed to revoke refresh token');
+        }
+
+        // Revoke session in DB
+        try {
+            await prisma.session.update({
+                where: { id: sessionId },
+                data: { revoked: true }
+            });
+        } catch (err) {
+            throw new Error('Failed to revoke session');
+        }
     }
 
 }

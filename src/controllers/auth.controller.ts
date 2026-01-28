@@ -159,15 +159,8 @@ export const logout = async (req: Request, res: Response) => {
 
         const sessionId = user.sessionId;
 
-        // Revoke access token
-        try {
-            await AuthService.revokeToken(accessToken, 'access');
-        } catch (err) {
-            logger.error('Failed to revoke access token', { error: (err as Error).message });
-        }
-
-        // Revoke refresh token
         const refreshToken = req.cookies.refreshToken;
+
         if (!refreshToken) {
             logger.warn('Refresh token missing during logout', { userId: user.id });
             return res.status(400).json({
@@ -176,25 +169,7 @@ export const logout = async (req: Request, res: Response) => {
             });
         }
 
-        try {
-            await AuthService.revokeToken(refreshToken, 'refresh');
-        } catch (err) {
-            logger.error('Failed to revoke refresh token', { error: (err as Error).message });
-        }
-
-        // Revoke session in DB
-        try {
-            await prisma.session.update({
-                where: { id: sessionId },
-                data: { revoked: true }
-            });
-        } catch (err) {
-            logger.error('Failed to revoke session in DB', { error: (err as Error).message, sessionId });
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to revoke session'
-            });
-        }
+        await AuthService.revokingData(sessionId, accessToken, refreshToken);
 
         // Clear refresh token cookie
         res.clearCookie('refreshToken', {
@@ -218,7 +193,7 @@ export const logout = async (req: Request, res: Response) => {
 
         return res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: `Internal server error: ${error.message}`
         });
     }
 };
