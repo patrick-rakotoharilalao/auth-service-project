@@ -158,6 +158,17 @@ export class RedisService {
             throw error;
         }
     }
+
+    async ttl<T>(key: string): Promise<number> {
+        try {
+            const value = await this.client.ttl(key);
+            return value;
+
+        } catch (error) {
+            console.error(`Error getting ttl for key ${key}:`, error);
+            throw error;
+        }
+    }
 }
 
 export const redisService = new RedisService();
