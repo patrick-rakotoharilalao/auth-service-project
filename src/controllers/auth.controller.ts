@@ -218,61 +218,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
         }
 
         const email = req.body.email;
-        const emailNormalized = email.toLowerCase();
-
-        // Find the user
-        const user = await prisma.user.findUnique({
-            where: { emailNormalized },
-            select: {
-                id: true,
-                email: true,
-                emailVerified: true
-            }
-        });
-
-        if (!user) {
-            logger.warn(`User not found for email: ${email}`);
-            return res.status(404).json({
-                success: false,
-                message: `User not found for email: ${email}`
-            });
-        }
-
-        // Generate secure token
-        const token = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
-        const tokenHashed = await bcrypt.hash(token, 12);
-
-        // Mark all previous password resets as used
-        await prisma.passwordResets.updateMany({
-            where: { userId: user.id, used: false },
-            data: { used: true }
-        });
-
-        // Store new reset token
-        await prisma.passwordResets.create({
-            data: {
-                tokenHash: tokenHashed,
-                expiresAt: new Date(Date.now() + tokenConversions.RESET_PASSWORD_TOKEN.miliseconds),
-                userId: user.id,
-                used: false
-            },
-            select: {
-                id: true,
-                tokenHash: true,
-                expiresAt: true,
-                userId: true,
-                createdAt: true,
-                used: true
-            }
-        });
-
-        // Send email for reset-password link // to implement later
-        logger.info('Email reset-password sent, please check your email', {
-            email: user.email,
-            sentAt: new Date(),
-            link: `${process.env.FRONTED_URL}/reset-password?token=${token}`
-        });
-
+        await AuthService.forgotUserPassword(email);
         return res.status(200).json({
             success: true,
             message: 'We have sent you an email to reset your password'
@@ -283,6 +229,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
             error: error.message,
             stack: error.stack
         });
+        if (error.message === 'User not found') {
+            return res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
 
         return res.status(500).json({
             success: false,
@@ -307,44 +259,9 @@ export const resetPassword = async (req: Request, res: Response) => {
 
         const { token, newPassword } = req.body;
 
-        // get all token valid 
-        const resetRecords = await prisma.passwordResets.findMany({
-            where: { used: false, expiresAt: { gte: new Date() } }
-        });
+        const passwordReset = await AuthService.resetUserPassword(token, newPassword);
 
-        if (!resetRecords.length) {
-            logger.info('No valid password reset token found', { token });
-            return res.status(404).json({
-                success: false,
-                message: 'Reset token not found or expired'
-            });
-        }
-
-        const match = resetRecords.find(r => bcrypt.compareSync(token, r.tokenHash));
-
-        if (!match) {
-            logger.warn('Invalid password reset token attempt', { token });
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid or already used reset token'
-            });
-        }
-
-        // Update user password
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-        await prisma.user.update({
-            where: { id: match.userId },
-            data: { passwordHash: hashedPassword }
-        });
-
-        // Mark token as used
-        await prisma.passwordResets.update({
-            where: { id: match.id },
-            data: { used: true }
-        });
-
-        logger.info('Password reset successfully', { userId: match.userId });
+        logger.info('Password reset successfully', { userId: passwordReset.userId });
 
         return res.status(200).json({
             success: true,
@@ -356,6 +273,20 @@ export const resetPassword = async (req: Request, res: Response) => {
             error: error.message,
             stack: error.stack
         });
+
+        if (error.message === 'Reset token not found or expired') {
+            return res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
+
+        if (error.message === 'Invalid or already used reset token') {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
 
         return res.status(500).json({
             success: false,

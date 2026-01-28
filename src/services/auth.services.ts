@@ -203,14 +203,14 @@ export class AuthService {
     static async revokingData(sessionId: string, accessToken: string, refreshToken: string) {
         // revoke access token
         try {
-            await AuthService.revokeToken(accessToken, 'access');
+            await this.revokeToken(accessToken, 'access');
         } catch (err) {
             throw new Error('Failed to revoke access token');
         }
 
         // revoke refresh token
         try {
-            await AuthService.revokeToken(refreshToken, 'refresh');
+            await this.revokeToken(refreshToken, 'refresh');
         } catch (err) {
             throw new Error('Failed to revoke refresh token');
         }
@@ -224,6 +224,92 @@ export class AuthService {
         } catch (err) {
             throw new Error('Failed to revoke session');
         }
+    }
+
+    static async forgotUserPassword(email: string) {
+        const emailNormalized = email.toLowerCase();
+
+        // Find the user
+        const user = await prisma.user.findUnique({
+            where: { emailNormalized },
+            select: {
+                id: true,
+                email: true,
+                emailVerified: true
+            }
+        });
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Generate secure token
+        const token = crypto.randomBytes(envConfig.tokenConfig.refreshTokenLength).toString('hex');
+        const tokenHashed = await bcrypt.hash(token, 12);
+
+        // Mark all previous password resets as used
+        await prisma.passwordResets.updateMany({
+            where: { userId: user.id, used: false },
+            data: { used: true }
+        });
+
+        // Store new reset token
+        await prisma.passwordResets.create({
+            data: {
+                tokenHash: tokenHashed,
+                expiresAt: new Date(Date.now() + tokenConversions.RESET_PASSWORD_TOKEN.miliseconds),
+                userId: user.id,
+                used: false
+            },
+            select: {
+                id: true,
+                tokenHash: true,
+                expiresAt: true,
+                userId: true,
+                createdAt: true,
+                used: true
+            }
+        });
+
+        // Send email for reset-password link // to implement later
+        // logger.info('Email reset-password sent, please check your email', {
+        //     email: user.email,
+        //     sentAt: new Date(),
+        //     link: `${process.env.FRONTED_URL}/reset-password?token=${token}`
+        // });
+    }
+
+    static async resetUserPassword(token: string, newPassword: string) {
+        // get all token valid 
+        const resetRecords = await prisma.passwordResets.findMany({
+            where: { used: false, expiresAt: { gte: new Date() } }
+        });
+
+        if (!resetRecords.length) {
+            throw new Error('Reset token not found or expired');
+        }
+
+        const match = resetRecords.find(r => bcrypt.compareSync(token, r.tokenHash));
+
+        if (!match) {
+            throw new Error('Invalid or already used reset token');
+        }
+
+        // Update user password
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        await prisma.user.update({
+            where: { id: match.userId },
+            data: { passwordHash: hashedPassword }
+        });
+
+        // Mark token as used
+        await prisma.passwordResets.update({
+            where: { id: match.id },
+            data: { used: true }
+        });
+        
+        return match;
     }
 
 }
