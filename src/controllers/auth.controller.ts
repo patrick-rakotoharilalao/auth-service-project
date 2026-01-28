@@ -214,7 +214,16 @@ export const login = async (req: Request, res: Response) => {
             httpOnly: true,
             secure: envConfig.serverConfig.nodeEnv === 'production',
             maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
-            sameSite: 'none'
+            sameSite: envConfig.serverConfig.nodeEnv === 'production' ? 'none' : 'lax',
+            path: '/'
+        });
+
+        res.cookie('sessionId', session.id, {
+            httpOnly: true,
+            secure: envConfig.serverConfig.nodeEnv === 'production',
+            maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
+            sameSite: envConfig.serverConfig.nodeEnv === 'production' ? 'none' : 'lax',
+            path: '/'
         });
 
         // Generate JWT token
@@ -417,7 +426,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
         logger.info('Email reset-password sent, please check your email', {
             email: user.email,
             sentAt: new Date(),
-            link: `https://frontend.com/reset-password?token=${token}`
+            link: `${process.env.FRONTED_URL}/reset-password?token=${token}`
         });
 
         return res.status(200).json({
@@ -514,27 +523,9 @@ export const resetPassword = async (req: Request, res: Response) => {
 
 export const refreshToken = async (req: Request, res: Response) => {
     try {
-        const accessTokenExpired = req.body.accessToken;
-
-        if (!accessTokenExpired) {
-            logger.warn('Access token missing in refresh token request');
-            return res.status(400).json({
-                success: false,
-                message: 'Access token is required'
-            });
-        }
-
-        const payload = jwt.decode(accessTokenExpired) as any;
-
-        if (!payload || !payload.sessionId) {
-            logger.warn('Access token invalid or malformed');
-            return res.status(400).json({
-                success: false,
-                message: 'Access token invalid'
-            });
-        }
 
         const refreshToken = req.cookies.refreshToken;
+        const sessionId = req.cookies.sessionId;
         if (!refreshToken) {
             logger.warn('Refresh token missing in cookie');
             return res.status(400).json({
@@ -543,9 +534,17 @@ export const refreshToken = async (req: Request, res: Response) => {
             });
         }
 
+        if (!sessionId) {
+            logger.warn('Session Id missing in cookie');
+            return res.status(400).json({
+                success: false,
+                message: 'Session Id is required'
+            });
+        }
+
         // Verify refresh token in DB
         const session = await prisma.session.findUnique({
-            where: { id: payload.sessionId },
+            where: { id: sessionId },
             select: {
                 id: true,
                 userId: true,
@@ -629,9 +628,6 @@ export const refreshToken = async (req: Request, res: Response) => {
                 algorithm: 'HS256'
             }
         );
-
-        // Blacklist old access token and refresh token
-        await AuthService.revokeToken(accessTokenExpired, 'access');
 
         logger.info('Access token refreshed successfully', {
             sessionId: session.id,

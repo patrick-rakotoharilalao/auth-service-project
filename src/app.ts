@@ -5,10 +5,16 @@ import prisma from './lib/prisma';
 import { redisService } from './services/redis.services';
 const app = express();
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 
 app.use(express.json());
 
 app.use(cookieParser());
+
+app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true
+}));
 
 app.use('/api/auth', authRoutes);
 

@@ -40,7 +40,8 @@ router.post('/reset-password', [
 ], resetPassword);
 
 router.post('/refresh-token', [
-    body('accessToken').notEmpty().withMessage('Access token is required')
 ], refreshToken);
+
+
 
 export default router;
