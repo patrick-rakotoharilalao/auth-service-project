@@ -8,6 +8,7 @@ class BadRequestError extends Error {
         this.name = 'BadRequestError';
         this.statusCode = 400;
         this.isOperational = true;
+        
     }
 }
 

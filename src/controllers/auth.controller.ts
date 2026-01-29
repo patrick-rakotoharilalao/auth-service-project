@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { envConfig, tokenConversions } from '../config/env.config';
-import { BadRequestError } from '../errors';
+import { BadRequestError, UnauthorizedError } from '../errors';
 import { AuthService } from '../services/auth.services';
 import logger from '../utils/logger';
 
@@ -11,17 +11,18 @@ import logger from '../utils/logger';
  * @param req 
  * @param res 
  */
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Validate inputs
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.warn('Validation errors during registration', { errors: errors.array() });
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 data: errors.array()
             });
+
         }
 
         const { email, password } = req.body;
@@ -38,18 +39,7 @@ export const register = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        if (error.message === 'Email already in use') {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already in use',
-            });
-        }
-
-        logger.error('Registration error', { error: error.message, stack: error.stack });
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-        });
+        next(error);
     }
 };
 
@@ -58,7 +48,7 @@ export const register = async (req: Request, res: Response) => {
  * @param req 
  * @param res 
  */
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const errors = validationResult(req);
 
@@ -72,13 +62,6 @@ export const login = async (req: Request, res: Response) => {
 
         const { email, password } = req.body;
         const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
-
-        logger.info('User logged in successfully', {
-            userId: loginData.user.id,
-            sessionId: loginData.session.id,
-            ip: req.ip,
-            device: req.headers['user-agent'] || 'unknown',
-        });
 
         res.cookie('refreshToken', loginData.refreshToken, {
             httpOnly: true,
@@ -96,6 +79,13 @@ export const login = async (req: Request, res: Response) => {
             path: '/'
         });
 
+        logger.info('User logged in successfully', {
+            userId: loginData.user.id,
+            sessionId: loginData.session.id,
+            ip: req.ip,
+            device: req.headers['user-agent'] || 'unknown',
+        });
+
         // Successful login
         return res.status(200).json({
             success: true,
@@ -107,25 +97,7 @@ export const login = async (req: Request, res: Response) => {
             }
         });
     } catch (error: any) {
-        if (error.message === 'Invalid email or password') {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
-
-        logger.error('Login error', {
-            error: error.message,
-            stack: error.stack,
-            email: req.body.email,
-            ip: req.ip
-        });
-
-        // Do not disclose sensitive information
-        return res.status(500).json({
-            success: false,
-            message: 'Authentication failed'
-        });
+        next(error);
     }
 };
 
@@ -134,7 +106,7 @@ export const login = async (req: Request, res: Response) => {
  * @param req 
  * @param res 
  */
-export const logout = async (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // blacklist the access and refresh token in Redis and mark session as revoked in DB
         logger.info('Logout request received', {
@@ -147,10 +119,7 @@ export const logout = async (req: Request, res: Response) => {
 
         if (!user || !user.sessionId) {
             logger.warn('Invalid access token during logout', { user });
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid access token'
-            });
+            throw new UnauthorizedError('Invalid access token');
         }
 
         const sessionId = user.sessionId;
@@ -159,10 +128,7 @@ export const logout = async (req: Request, res: Response) => {
 
         if (!refreshToken) {
             logger.warn('Refresh token missing during logout', { userId: user.id });
-            return res.status(400).json({
-                success: false,
-                message: 'Refresh token is required for logout'
-            });
+            throw new UnauthorizedError('Refresh token is required for logout');
         }
 
         await AuthService.revokingData(sessionId, accessToken, refreshToken);
@@ -187,10 +153,7 @@ export const logout = async (req: Request, res: Response) => {
             ip: req.ip
         });
 
-        return res.status(500).json({
-            success: false,
-            message: `Internal server error: ${error.message}`
-        });
+        next(error);
     }
 };
 
@@ -200,7 +163,7 @@ export const logout = async (req: Request, res: Response) => {
  * @param res 
  * @returns 
  */
-export const forgotPassword = async (req: Request, res: Response) => {
+export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Validate inputs
         const errors = validationResult(req);
@@ -227,22 +190,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
             error: error.message,
             stack: error.stack
         });
-        if (error.message === 'User not found') {
-            return res.status(404).json({
-                success: false,
-                message: error.message
-            });
-        }
-
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
+        next(error);
     }
 };
 
-export const resetPassword = async (req: Request, res: Response) => {
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Validation des inputs
         const errors = validationResult(req);
@@ -272,25 +224,7 @@ export const resetPassword = async (req: Request, res: Response) => {
             stack: error.stack
         });
 
-        if (error.message === 'Reset token not found or expired') {
-            return res.status(404).json({
-                success: false,
-                message: error.message
-            });
-        }
-
-        if (error.message === 'Invalid or already used reset token') {
-            return res.status(400).json({
-                success: false,
-                message: error.message
-            });
-        }
-
-        return res.status(500).json({
-            success: false,
-            message: 'An unexpected error occurred while resetting password',
-            error: error.message
-        });
+        next(error);
     }
 };
 

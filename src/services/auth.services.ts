@@ -7,7 +7,7 @@ import prisma from '../lib/prisma';
 import logger from '../utils/logger';
 import { EmailService } from './email.service';
 import { redisService } from './redis.services';
-import { InternalServerError, UnauthorizedError } from '../errors';
+import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -24,39 +24,35 @@ export class AuthService {
     }
 
     static async createUser(email: string, password: string) {
-        try {
-            const emailNormalized = email.toLowerCase();
+        const emailNormalized = email.toLowerCase();
 
-            // Check email not already in DB
-            const existingUser = await prisma.user.findUnique({
-                where: { emailNormalized },
-            });
+        // Check email not already in DB
+        const existingUser = await prisma.user.findUnique({
+            where: { emailNormalized },
+        });
 
-            if (existingUser) {
-                throw new Error('Email already in use');
-            }
-
-            // Hash password with bcrypt
-            const saltRounds = process.env.BCRYPT_SALT_ROUNDS ? parseInt(process.env.BCRYPT_SALT_ROUNDS) : 10;
-            const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-            // Create user in DB
-            const newUser = await prisma.user.create({
-                data: {
-                    email,
-                    passwordHash: hashedPassword,
-                    emailNormalized
-                },
-                select: {
-                    id: true,
-                    email: true
-                }
-            });
-
-            return newUser;
-        } catch (error: any) {
-            throw error;
+        if (existingUser) {
+            throw new BadRequestError('Email already in use');
         }
+
+        // Hash password with bcrypt
+        const saltRounds = process.env.BCRYPT_SALT_ROUNDS ? parseInt(process.env.BCRYPT_SALT_ROUNDS) : 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Create user in DB
+        const newUser = await prisma.user.create({
+            data: {
+                email,
+                passwordHash: hashedPassword,
+                emailNormalized
+            },
+            select: {
+                id: true,
+                email: true
+            }
+        });
+
+        return newUser;
     }
 
     static async loginUser(email: string, password: string, context: { ip: string; userAgent: string }) {
@@ -84,14 +80,14 @@ export class AuthService {
 
         if (!user) {
             await bcrypt.compare(password, '$2b$10$fakehashforconstanttime'); // Hash factice
-            throw new Error('Invalid email or password');
+            throw new UnauthorizedError('Invalid email or password')
         }
 
         // Compare hashed password
         const isMatch = await bcrypt.compare(password, user.passwordHash);
 
         if (!isMatch) {
-            throw new Error('Invalid email or password');
+            throw new UnauthorizedError('Invalid email or password')
         }
 
         return user;
@@ -207,14 +203,14 @@ export class AuthService {
         try {
             await this.revokeToken(accessToken, 'access');
         } catch (err) {
-            throw new Error('Failed to revoke access token');
+            throw new InternalServerError('Failed to revoke access token');
         }
 
         // revoke refresh token
         try {
             await this.revokeToken(refreshToken, 'refresh');
         } catch (err) {
-            throw new Error('Failed to revoke refresh token');
+            throw new InternalServerError('Failed to revoke refresh token');
         }
 
         // Revoke session in DB
@@ -224,7 +220,7 @@ export class AuthService {
                 data: { revoked: true }
             });
         } catch (err) {
-            throw new Error('Failed to revoke session');
+            throw new InternalServerError('Failed to revoke session');
         }
     }
 
@@ -242,7 +238,7 @@ export class AuthService {
         });
 
         if (!user) {
-            throw new Error('User not found');
+            throw new NotFoundError('User not found');
         }
 
         // Generate secure token
@@ -290,8 +286,10 @@ export class AuthService {
                 email: user.email,
                 error: error.message,
             });
+
+            throw new InternalServerError('Failed to send password reset email');
             // Optionally, you could throw here if email is critical
-            // throw new Error('Failed to send password reset email');
+            // throw new Error('Failed to send password reset email');;
         }
 
         // Don't return token for security - email contains the link
@@ -305,13 +303,13 @@ export class AuthService {
         });
 
         if (!resetRecords.length) {
-            throw new Error('Reset token not found or expired');
+            throw new NotFoundError('Reset token not found or expired');
         }
 
         const match = resetRecords.find(r => bcrypt.compareSync(token, r.tokenHash));
 
         if (!match) {
-            throw new Error('Invalid or already used reset token');
+            throw new UnauthorizedError('Invalid or already used reset token');
         }
 
         // Update user password
