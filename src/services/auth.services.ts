@@ -6,6 +6,8 @@ import prisma from '../lib/prisma';
 import { redisService } from './redis.services';
 import jwt from 'jsonwebtoken';
 import { User } from '@/generated/prisma/client';
+import { EmailService } from './email.service';
+import logger from '../utils/logger';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -271,12 +273,29 @@ export class AuthService {
             }
         });
 
-        // Send email for reset-password link // to implement later
-        // logger.info('Email reset-password sent, please check your email', {
-        //     email: user.email,
-        //     sentAt: new Date(),
-        //     link: `${process.env.FRONTED_URL}/reset-password?token=${token}`
-        // });
+        // Build reset link
+        const resetLink = `${envConfig.serverConfig.frontendUrl}/reset-password?token=${token}`;
+
+        // Send password reset email
+        try {
+            await EmailService.sendPasswordResetEmail(user.email, resetLink);
+            logger.info('Password reset email sent successfully', {
+                email: user.email,
+                userId: user.id,
+            });
+        } catch (error: any) {
+            // Log error but don't fail the request (user still gets token in DB)
+            // In production, you might want to handle this differently
+            logger.error('Failed to send password reset email', {
+                email: user.email,
+                error: error.message,
+            });
+            // Optionally, you could throw here if email is critical
+            // throw new Error('Failed to send password reset email');
+        }
+
+        // Don't return token for security - email contains the link
+        return { success: true };
     }
 
     static async resetUserPassword(token: string, newPassword: string) {

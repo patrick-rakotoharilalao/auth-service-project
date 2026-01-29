@@ -3,9 +3,17 @@ import express, { Request, Response } from 'express';
 import authRoutes from './routes/auth.routes';
 import prisma from './lib/prisma';
 import { redisService } from './services/redis.services';
+import { EmailService } from './services/email.service';
 const app = express();
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+
+// Initialize email service
+try {
+    EmailService.initialize();
+} catch (error) {
+    console.warn('Email service initialization failed. Email features will not work:', error);
+}
 
 app.use(express.json());
 

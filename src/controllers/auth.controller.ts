@@ -219,9 +219,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
         const email = req.body.email;
         await AuthService.forgotUserPassword(email);
+        
+        // Always return same message for security (don't reveal if user exists)
         return res.status(200).json({
             success: true,
-            message: 'We have sent you an email to reset your password'
+            message: 'If an account with that email exists, we have sent a password reset link.'
         });
 
     } catch (error: any) {

@@ -1,4 +1,3 @@
-import { refreshToken } from '@/controllers/auth.controller';
 import dotenv from 'dotenv';
 import { StringValue } from 'ms';
 
@@ -18,6 +17,7 @@ export const envConfig = {
         nodeEnv: process.env.NODE_ENV || 'development',
         jwtSecret: process.env.JWT_SECRET || 'your_jwt_secret',
         bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 10,
+        frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
     },
 
     redisConfig: {
@@ -36,6 +36,16 @@ export const envConfig = {
         resetPasswordTokenTTLHours: Number(process.env.RESET_PASSWORD_TOKEN_TTL_HOURS) || 1,
         maxSessionPerUser: Number(process.env.MAX_SESSIONS_PER_USER) || 5,
         refreshTokenLength: Number(process.env.REFRESH_TOKEN_LENGTH) || 64,
+    },
+
+    emailConfig: {
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+        user: process.env.SMTP_USER || '',
+        password: process.env.SMTP_PASSWORD || '',
+        fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
+        fromName: process.env.SMTP_FROM_NAME || 'Auth Service',
     }
 };
 
