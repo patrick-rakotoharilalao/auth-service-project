@@ -1,13 +1,13 @@
+import { User } from '@/generated/prisma/client';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { Request } from 'express';
+import jwt from 'jsonwebtoken';
 import { envConfig, tokenConversions } from '../config/env.config';
 import prisma from '../lib/prisma';
-import { redisService } from './redis.services';
-import jwt from 'jsonwebtoken';
-import { User } from '@/generated/prisma/client';
-import { EmailService } from './email.service';
 import logger from '../utils/logger';
+import { EmailService } from './email.service';
+import { redisService } from './redis.services';
+import { InternalServerError, UnauthorizedError } from '../errors';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -327,8 +327,69 @@ export class AuthService {
             where: { id: match.id },
             data: { used: true }
         });
-        
+
         return match;
+    }
+
+    static async refreshUserToken(sessionId: string, refreshToken: string) {
+        // Verify refresh token in DB
+        const session = await prisma.session.findUnique({
+            where: { id: 'kfff' },
+            select: {
+                id: true,
+                userId: true,
+                tokenHash: true,
+                revoked: true,
+                createdAt: true,
+                user: true
+            }
+        });
+
+        if (!session) {
+            throw new UnauthorizedError('Invalid refresh token');
+        }
+
+        if (session.revoked) {
+            throw new UnauthorizedError('Session revoked');
+        }
+
+        // Verify that token matches the one in session
+        const tokenMatched = await bcrypt.compare(refreshToken, session.tokenHash);
+        if (!tokenMatched) {
+            throw new UnauthorizedError('Invalid refresh token');
+        }
+
+        // Verify refresh token blacklist
+        const blacklisted = await redisService.get(`blacklist:${refreshToken}`);
+        if (blacklisted) {
+            throw new UnauthorizedError('Refresh token invalid or expired');
+        }
+
+        // Verify refresh token TTL in Redis
+        const refreshTokenTTL = await redisService.ttl(`refreshToken:${session.tokenHash}`);
+        if (refreshTokenTTL === -2) {
+            throw new UnauthorizedError('Refresh token expired on invalid');
+        }
+
+        if (refreshTokenTTL === -1) {
+            throw new InternalServerError('Invalid refresh token configuration');
+        }
+
+        // Generate a new access token
+        const newPayload = {
+            userId: session.userId,
+            email: session.user.email,
+            sessionId: session.id
+        };
+
+        const newAccessToken = jwt.sign(
+            newPayload,
+            envConfig.serverConfig.jwtSecret,
+            {
+                expiresIn: envConfig.tokenConfig.accessTokenTTL,
+                algorithm: 'HS256'
+            }
+        );
     }
 
 }

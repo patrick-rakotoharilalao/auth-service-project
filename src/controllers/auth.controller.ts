@@ -1,12 +1,8 @@
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import jwt from 'jsonwebtoken';
 import { envConfig, tokenConversions } from '../config/env.config';
-import prisma from '../lib/prisma';
+import { BadRequestError } from '../errors';
 import { AuthService } from '../services/auth.services';
-import { redisService } from '../services/redis.services';
 import logger from '../utils/logger';
 
 
@@ -219,7 +215,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
         const email = req.body.email;
         await AuthService.forgotUserPassword(email);
-        
+
         // Always return same message for security (don't reveal if user exists)
         return res.status(200).json({
             success: true,
@@ -298,117 +294,19 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
 };
 
-export const refreshToken = async (req: Request, res: Response) => {
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
 
         const refreshToken = req.cookies.refreshToken;
         const sessionId = req.cookies.sessionId;
         if (!refreshToken) {
-            logger.warn('Refresh token missing in cookie');
-            return res.status(400).json({
-                success: false,
-                message: 'Refresh token is required'
-            });
+            throw new BadRequestError('Refresh token missing in cookie');
         }
 
-        if (!sessionId) {
-            logger.warn('Session Id missing in cookie');
-            return res.status(400).json({
-                success: false,
-                message: 'Session Id is required'
-            });
-        }
-
-        // Verify refresh token in DB
-        const session = await prisma.session.findUnique({
-            where: { id: sessionId },
-            select: {
-                id: true,
-                userId: true,
-                tokenHash: true,
-                revoked: true,
-                createdAt: true,
-                user: true
-            }
-        });
-
-        if (!session) {
-            logger.warn('Session not found during refresh token');
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid refresh token'
-            });
-        }
-
-        if (session.revoked) {
-            logger.warn('Revoked session used during refresh token', { sessionId: session.id });
-            return res.status(401).json({
-                success: false,
-                message: 'Session revoked'
-            });
-        }
-
-        // Verify that token matches the one in session
-        const tokenMatched = await bcrypt.compare(refreshToken, session.tokenHash);
-        if (!tokenMatched) {
-            logger.error('Refresh token does not match token hash in DB', {
-                sessionId: session.id
-            });
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid refresh token'
-            });
-        }
-
-        // Verify refresh token blacklist
-        const blacklisted = await redisService.get(`blacklist:${refreshToken}`);
-        if (blacklisted) {
-            logger.warn('Blacklisted refresh token used', { sessionId: session.id });
-            return res.status(401).json({
-                success: false,
-                message: 'Refresh token invalid or expired'
-            });
-        }
-
-        // Verify refresh token TTL in Redis
-        const refreshTokenTTL = await redisService.ttl(`refreshToken:${session.tokenHash}`);
-        if (refreshTokenTTL === -2) {
-            logger.warn('Refresh token expired in Redis', { sessionId: session.id });
-            return res.status(401).json({
-                success: false,
-                message: 'Refresh token expired or invalid'
-            });
-        }
-
-        if (refreshTokenTTL === -1) {
-            logger.error('Refresh token has no TTL in Redis', {
-                sessionId: session.id
-            });
-            return res.status(500).json({
-                success: false,
-                message: 'Invalid refresh token configuration'
-            });
-        }
-
-        // Generate a new access token
-        const newPayload = {
-            userId: session.userId,
-            email: session.user.email,
-            sessionId: session.id
-        };
-
-        const newAccessToken = jwt.sign(
-            newPayload,
-            envConfig.serverConfig.jwtSecret,
-            {
-                expiresIn: envConfig.tokenConfig.accessTokenTTL,
-                algorithm: 'HS256'
-            }
-        );
+        const newAccessToken = await AuthService.refreshUserToken(sessionId, refreshToken);
 
         logger.info('Access token refreshed successfully', {
-            sessionId: session.id,
-            userId: session.userId
+            sessionId: sessionId
         });
 
         return res.status(200).json({
@@ -418,15 +316,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        logger.error('Refresh token error', {
-            error: error.message,
-            stack: error.stack
-        });
-
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error'
-        });
+        next(error);
     }
 };
 

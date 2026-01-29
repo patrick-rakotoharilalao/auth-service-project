@@ -1,12 +1,13 @@
 // app.ts
-import express, { Request, Response } from 'express';
-import authRoutes from './routes/auth.routes';
-import prisma from './lib/prisma';
-import { redisService } from './services/redis.services';
-import { EmailService } from './services/email.service';
-const app = express();
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import express, { Request, Response } from 'express';
+import prisma from './lib/prisma';
+import { errorHandler } from './middlewares/errorHandler';
+import authRoutes from './routes/auth.routes';
+import { EmailService } from './services/email.service';
+import { redisService } from './services/redis.services';
+const app = express();
 
 // Initialize email service
 try {
@@ -38,5 +39,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
         res.status(500).send('Service is unhealthy: ');
     }
 });
+
+app.use(errorHandler);
 
 export default app;
