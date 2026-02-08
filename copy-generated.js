@@ -1,8 +1,8 @@
-const fs = require('fs');
-const path = require('path');
+import { cpSync } from 'fs';
+import { join } from 'path';
 
-const src = path.join(__dirname, 'src', 'generated');
-const dest = path.join(__dirname, 'dist', 'generated');
+const src = join(__dirname, 'src', 'generated');
+const dest = join(__dirname, 'dist', 'generated');
 
-fs.cpSync(src, dest, { recursive: true });
+cpSync(src, dest, { recursive: true });
 console.log('✓ Generated files copied to dist/');
