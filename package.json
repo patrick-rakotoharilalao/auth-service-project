@@ -6,8 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon",
-    "build": "prisma generate && tsc && npm run copy-generated",
-    "copy-generated": "copyfiles -u 2 'src/generated/**/*' dist/",
+    "build": "prisma generate && tsc && npm run postbuild",
+    "postbuild": "copyfiles -u 1 'src/generated/**/*' dist/",
     "start": "node dist/app.js"
   },
   "keywords": [],
