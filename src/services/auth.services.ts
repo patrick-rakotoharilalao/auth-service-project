@@ -7,6 +7,7 @@ import prisma from '../lib/prisma';
 import logger from '../utils/logger';
 import { EmailService } from './email.service';
 import { redisService } from './redis.services';
+import { PasswordResets } from '@/generated/prisma/client';
 import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
@@ -298,7 +299,7 @@ export class AuthService {
 
     static async resetUserPassword(token: string, newPassword: string) {
         // get all token valid 
-        const resetRecords = await prisma.passwordResets.findMany({
+        const resetRecords: PasswordResets[] = await prisma.passwordResets.findMany({
             where: { used: false, expiresAt: { gte: new Date() } }
         });
 
@@ -306,7 +307,7 @@ export class AuthService {
             throw new NotFoundError('Reset token not found or expired');
         }
 
-        const match = resetRecords.find(r => bcrypt.compareSync(token, r.tokenHash));
+        const match = resetRecords.find(r=> bcrypt.compareSync(token, r.tokenHash));
 
         if (!match) {
             throw new UnauthorizedError('Invalid or already used reset token');
