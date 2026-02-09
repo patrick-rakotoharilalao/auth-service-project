@@ -20,16 +20,12 @@ class RedisConnection {
             port: envConfig.redisConfig.port,
             password: envConfig.redisConfig.password,
             db: envConfig.redisConfig.db,
-            url: (envConfig.redisConfig as any).url
+            url: (envConfig.redisConfig as any).redisUrl 
         };
         this.client = createClient({
             url: config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`,
             database: config.db
         });
-        const connectionUrl = config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`;
-
-        console.log('🔍 Redis connection URL:', connectionUrl);
-        console.log('🔍 Redis database:', config.db);
 
         this.setupEventListeners();
     }
