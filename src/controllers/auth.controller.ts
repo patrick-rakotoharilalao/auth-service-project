@@ -8,6 +8,7 @@ import prisma from '../lib/prisma';
 import { AuthService } from '../services/auth.services';
 import { redisService } from '../services/redis.services';
 import logger from '../utils/logger';
+import { PasswordResets } from '../generated/prisma/client';
 
 
 /**
@@ -464,7 +465,7 @@ export const resetPassword = async (req: Request, res: Response) => {
         const { token, newPassword } = req.body;
 
         // get all token valid 
-        const resetRecords = await prisma.passwordResets.findMany({
+        const resetRecords: PasswordResets[] = await prisma.passwordResets.findMany({
             where: { used: false, expiresAt: { gte: new Date() } }
         });
 
