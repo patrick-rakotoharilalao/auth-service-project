@@ -6,7 +6,7 @@ export interface RedisConfig {
     port: number;
     password?: string;
     db?: number;
-    url?: string; // Ajout pour supporter l'URL complète
+    url?: string;
 }
 
 class RedisConnection {
@@ -20,11 +20,9 @@ class RedisConnection {
             port: envConfig.redisConfig.port,
             password: envConfig.redisConfig.password,
             db: envConfig.redisConfig.db,
-            url: envConfig.redisConfig.url // URL complète si disponible
+            // Vérifie si l'URL existe sur l'objet de configuration avant de l'ajouter
+            url: (envConfig.redisConfig as any).url // 'url' might not exist on redisConfig type
         };
-
-        // Si une URL complète est fournie, l'utiliser directement
-        // Sinon, construire l'URL à partir des composants
         this.client = createClient({
             url: config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`,
             database: config.db
