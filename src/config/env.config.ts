@@ -26,6 +26,7 @@ export const envConfig = {
         password: process.env.REDIS_PASSWORD || undefined,
         db: Number(process.env.REDIS_DB) || 0,
         redisTTLDays: process.env.REDIS_TTL_DAYS ? parseInt(process.env.REDIS_TTL_DAYS) : 30,
+        redisUrl: process.env.REDIS_URL || undefined,
     },
 
     tokenConfig: {
