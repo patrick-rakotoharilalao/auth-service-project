@@ -20,13 +20,15 @@ class RedisConnection {
             port: envConfig.redisConfig.port,
             password: envConfig.redisConfig.password,
             db: envConfig.redisConfig.db,
-            // Vérifie si l'URL existe sur l'objet de configuration avant de l'ajouter
-            url: (envConfig.redisConfig as any).url // 'url' might not exist on redisConfig type
+            url: (envConfig.redisConfig as any).url
         };
         this.client = createClient({
             url: config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`,
             database: config.db
         });
+
+        console.log('🔍 Redis connection URL:', connectionUrl);
+        console.log('🔍 Redis database:', config.db);
 
         this.setupEventListeners();
     }
