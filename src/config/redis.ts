@@ -6,6 +6,7 @@ export interface RedisConfig {
     port: number;
     password?: string;
     db?: number;
+    url?: string; // Ajout pour supporter l'URL complète
 }
 
 class RedisConnection {
@@ -18,12 +19,14 @@ class RedisConnection {
             host: envConfig.redisConfig.host,
             port: envConfig.redisConfig.port,
             password: envConfig.redisConfig.password,
-            db: envConfig.redisConfig.db
+            db: envConfig.redisConfig.db,
+            url: envConfig.redisConfig.url // URL complète si disponible
         };
 
+        // Si une URL complète est fournie, l'utiliser directement
+        // Sinon, construire l'URL à partir des composants
         this.client = createClient({
-            url: `redis://${config.host}:${config.port}`,
-            password: config.password,
+            url: config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`,
             database: config.db
         });
 
@@ -37,11 +40,11 @@ class RedisConnection {
 
         this.client.on('ready', () => {
             this.isConnected = true;
-            console.log('Redis connected successfully');
+            console.log('✅ Redis connected successfully');
         });
 
         this.client.on('error', (error) => {
-            console.error('Redis error:', error);
+            console.error('❌ Redis error:', error);
             this.isConnected = false;
         });
 
@@ -51,7 +54,7 @@ class RedisConnection {
         });
 
         this.client.on('reconnecting', () => {
-            console.log('Redis reconnecting...');
+            console.log('🔄 Redis reconnecting...');
         });
     }
 
