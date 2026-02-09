@@ -25,6 +25,10 @@ app.use(cors({
     credentials: true
 }));
 
+app.get("/", (req, res) => {
+    res.send("Welcome to the Auth Service!");
+});
+
 app.use('/api/auth', authRoutes);
 
 app.get('/api/health', async (req: Request, res: Response) => {
