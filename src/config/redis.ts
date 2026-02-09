@@ -26,6 +26,7 @@ class RedisConnection {
             url: config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`,
             database: config.db
         });
+        const connectionUrl = config.url || `redis://${config.password ? `:${config.password}@` : ''}${config.host}:${config.port}`;
 
         console.log('🔍 Redis connection URL:', connectionUrl);
         console.log('🔍 Redis database:', config.db);
