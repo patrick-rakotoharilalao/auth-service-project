@@ -389,6 +389,8 @@ export class AuthService {
                 algorithm: 'HS256'
             }
         );
+
+        return newAccessToken;
     }
 
 }
