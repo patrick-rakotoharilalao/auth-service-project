@@ -307,7 +307,7 @@ export class AuthService {
             throw new NotFoundError('Reset token not found or expired');
         }
 
-        const match = resetRecords.find(r=> bcrypt.compareSync(token, r.tokenHash));
+        const match = resetRecords.find(r => bcrypt.compareSync(token, r.tokenHash));
 
         if (!match) {
             throw new UnauthorizedError('Invalid or already used reset token');
@@ -333,7 +333,7 @@ export class AuthService {
     static async refreshUserToken(sessionId: string, refreshToken: string) {
         // Verify refresh token in DB
         const session = await prisma.session.findUnique({
-            where: { id: 'kfff' },
+            where: { id: sessionId },
             select: {
                 id: true,
                 userId: true,
