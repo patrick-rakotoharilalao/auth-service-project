@@ -1,12 +1,14 @@
 // auth.routes.ts
-import { body } from "express-validator";
-import { login, register, logout, forgotPassword, resetPassword, refreshToken } from "../controllers/auth.controller";
 import { Router } from "express";
+import { body } from "express-validator";
+import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "../controllers/auth.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import { loginRegisterRateLimit } from "../middlewares/rateLimit.middleware";
 
 const router = Router();
 
 router.post('/register', [
+    loginRegisterRateLimit,
     body('email').isEmail().withMessage('Invalid email'),
     body('password')
         .isLength({ min: 8 }).withMessage('Password must be at least 6 characters long')
@@ -17,6 +19,7 @@ router.post('/register', [
 ], register);
 
 router.post('/login', [
+    loginRegisterRateLimit,
     body('email').isEmail().withMessage('Invalid email'),
     body('password').notEmpty().withMessage('Password is required'),
     // rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }) // to implement later

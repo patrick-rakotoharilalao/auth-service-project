@@ -4,6 +4,7 @@ import cors from 'cors';
 import express, { Request, Response } from 'express';
 import prisma from './lib/prisma';
 import { errorHandler } from './middlewares/errorHandler';
+import { otherRateLimit } from './middlewares/rateLimit.middleware';
 import authRoutes from './routes/auth.routes';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
@@ -16,6 +17,8 @@ try {
     console.warn('Email service initialization failed. Email features will not work:', error);
 }
 
+app.set('trust proxy', 1);
+
 app.use(express.json());
 
 app.use(cookieParser());
@@ -24,6 +27,8 @@ app.use(cors({
     origin: 'http://localhost:3000',
     credentials: true
 }));
+
+app.use(otherRateLimit);
 
 app.get("/", (req, res) => {
     res.send("Welcome to the Auth Service!");
