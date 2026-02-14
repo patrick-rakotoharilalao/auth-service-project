@@ -1,10 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import { envConfig, tokenConversions } from '../config/env.config';
+import { envConfig } from '../config/env.config';
 import { BadRequestError, UnauthorizedError } from '../errors';
 import { AuthService } from '../services/auth.services';
-import logger from '../utils/logger';
 import { setAuthCookies } from '../utils/cookie.utils';
+import logger from '../utils/logger';
 
 
 /**
