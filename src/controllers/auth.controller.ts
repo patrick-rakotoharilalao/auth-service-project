@@ -4,6 +4,7 @@ import { envConfig, tokenConversions } from '../config/env.config';
 import { BadRequestError, UnauthorizedError } from '../errors';
 import { AuthService } from '../services/auth.services';
 import logger from '../utils/logger';
+import { setAuthCookies } from '../utils/cookie.utils';
 
 
 /**
@@ -63,21 +64,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         const { email, password } = req.body;
         const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
 
-        res.cookie('refreshToken', loginData.refreshToken, {
-            httpOnly: true,
-            secure: envConfig.serverConfig.nodeEnv === 'production',
-            maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
-            sameSite: envConfig.serverConfig.nodeEnv === 'production' ? 'none' : 'lax',
-            path: '/'
-        });
-
-        res.cookie('sessionId', loginData.session.id, {
-            httpOnly: true,
-            secure: envConfig.serverConfig.nodeEnv === 'production',
-            maxAge: tokenConversions.REFRESH_TOKEN_EXPIRY.miliseconds,
-            sameSite: envConfig.serverConfig.nodeEnv === 'production' ? 'none' : 'lax',
-            path: '/'
-        });
+        setAuthCookies(res, loginData.refreshToken, loginData.session.id);
 
         logger.info('User logged in successfully', {
             userId: loginData.user.id,
