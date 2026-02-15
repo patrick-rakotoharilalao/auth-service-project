@@ -2,9 +2,12 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { Request, Response } from 'express';
+import passport from './config/passport.config';
 import prisma from './lib/prisma';
 import { errorHandler } from './middlewares/errorHandler';
+import { otherRateLimit } from './middlewares/rateLimit.middleware';
 import authRoutes from './routes/auth.routes';
+import oauthRoutes from './routes/oauth.routes';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
 const app = express();
@@ -16,6 +19,8 @@ try {
     console.warn('Email service initialization failed. Email features will not work:', error);
 }
 
+app.set('trust proxy', 1);
+
 app.use(express.json());
 
 app.use(cookieParser());
@@ -25,13 +30,20 @@ app.use(cors({
     credentials: true
 }));
 
+app.use(otherRateLimit);
+
 app.get("/", (req, res) => {
     res.send("Welcome to the Auth Service!");
 });
 
-app.use('/api/auth', authRoutes);
 
-app.get('/api/health', async (req: Request, res: Response) => {
+// EXPLICATION : Initialisation de Passport
+app.use(passport.initialize()); // Configure Passport
+
+app.use('/api/auth', authRoutes);
+app.use('/api/auth', oauthRoutes);
+
+app.get('/health', async (req: Request, res: Response) => {
     try {
         console.log(res.status);
         await prisma.$queryRaw`SELECT 1`;

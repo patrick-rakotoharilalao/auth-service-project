@@ -9,6 +9,9 @@
     "build": "prisma generate && tsc && npm run postbuild",
     "postbuild": "copyfiles -u 1 'src/generated/**/*' dist/",
     "start": "node dist/app.js"
+    "build": "prisma generate && tsc && npm run postbuild",
+    "postbuild": "copyfiles -u 1 'src/generated/**/*' dist/",
+    "start": "node dist/app.js"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +36,9 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.0.3",
@@ -41,9 +47,14 @@
     "@types/redis": "^4.0.10",
     "@types/winston": "^2.4.4",
     "copyfiles": "^2.4.1",
+    "@types/redis": "^4.0.10",
+    "@types/winston": "^2.4.4",
+    "copyfiles": "^2.4.1",
     "nodemon": "^3.1.11",
+    "prisma": "^7.3.0",
     "prisma": "^7.3.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }
+

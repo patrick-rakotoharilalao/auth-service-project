@@ -9,6 +9,8 @@ import { EmailService } from './email.service';
 import { redisService } from './redis.services';
 import { PasswordResets } from '@/generated/prisma/client';
 import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
+import { Profile } from 'passport';
+import { OAuthProfileInterface } from '@/interfaces/OAuthProfileInterface';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -24,7 +26,7 @@ export class AuthService {
 
     }
 
-    static async createUser(email: string, password: string) {
+    static async createUser(email: string, password: string | null, profile: OAuthProfileInterface | null = null) {
         const emailNormalized = email.toLowerCase();
 
         // Check email not already in DB
@@ -37,28 +39,43 @@ export class AuthService {
         }
 
         // Hash password with bcrypt
+        let newUser = null;
         const saltRounds = process.env.BCRYPT_SALT_ROUNDS ? parseInt(process.env.BCRYPT_SALT_ROUNDS) : 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        if (!profile) {
+            const hashedPassword = await bcrypt.hash(password!, saltRounds);
 
-        // Create user in DB
-        const newUser = await prisma.user.create({
-            data: {
-                email,
-                passwordHash: hashedPassword,
-                emailNormalized
-            },
-            select: {
-                id: true,
-                email: true
-            }
-        });
+            // Create user in DB
+            newUser = await prisma.user.create({
+                data: {
+                    email,
+                    passwordHash: hashedPassword,
+                    emailNormalized
+                }
+            });
+        } else {
+            newUser = await prisma.user.create({
+                data: {
+                    email,
+                    emailNormalized,
+                    oauthAccounts: {
+                        create: {
+                            provider: profile.provider,
+                            providerId: profile.providerId,
+                            accessToken: profile.accessToken,
+                            refreshToken: profile.refreshToken
+                        }
+                    }
+                }
+            });
+        }
+
 
         return newUser;
     }
 
-    static async loginUser(email: string, password: string, context: { ip: string; userAgent: string }) {
+    static async loginUser(email: string, password: string | null, context: { ip: string; userAgent: string }, loginMethod: 'credentials' | 'oauth' = 'credentials') {
         try {
-            const user = await this.verifyCredentials(email, password);
+            const user = await this.verifyCredentials(email, password, loginMethod);
             await this.enforceSessionLimits(user);
             await this.revokeSameDeviceSession(user.id, context.userAgent);
             const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);
@@ -71,7 +88,7 @@ export class AuthService {
         }
     }
 
-    private static async verifyCredentials(email: string, password: string): Promise<User> {
+    private static async verifyCredentials(email: string, password: string | null, loginMethod: 'credentials' | 'oauth'): Promise<User> {
 
         const emailNormalized = email.toLowerCase();
         // Attempt to find user by email
@@ -79,13 +96,18 @@ export class AuthService {
             where: { emailNormalized: emailNormalized }
         });
 
+
         if (!user) {
-            await bcrypt.compare(password, '$2b$10$fakehashforconstanttime'); // Hash factice
+            await bcrypt.compare('$2b$10$fakehashforconstanttimeleft', '$2b$10$fakehashforconstanttimeright'); // Hash factice
             throw new UnauthorizedError('Invalid email or password')
         }
 
+        if (loginMethod === 'oauth') {
+            return user;
+        }
+
         // Compare hashed password
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        const isMatch = await bcrypt.compare(password!, user.passwordHash!);
 
         if (!isMatch) {
             throw new UnauthorizedError('Invalid email or password')
