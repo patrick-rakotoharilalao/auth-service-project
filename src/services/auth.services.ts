@@ -76,6 +76,45 @@ export class AuthService {
     static async loginUser(email: string, password: string | null, context: { ip: string; userAgent: string }, loginMethod: 'credentials' | 'oauth' = 'credentials') {
         try {
             const user = await this.verifyCredentials(email, password, loginMethod);
+
+            if (user.mfaEnabled) {
+                const tempToken = jwt.sign(
+                    { userId: user.id, email: email, step: 'awaiting_mfa' },
+                    envConfig.serverConfig.jwtSecret,
+                    { expiresIn: '5m' }
+                );
+                return {
+                    requiresMfa: true,
+                    userId: user.id,
+                    email: user.email,
+                    tempToken
+                };
+            }
+
+            await this.enforceSessionLimits(user);
+            await this.revokeSameDeviceSession(user.id, context.userAgent);
+            const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);
+            const session = await this.createSession(user.id, refreshTokenHash, context.userAgent);
+            const accessToken = this.generateAccessToken(user, session.id);
+
+            return { user, refreshToken, accessToken, session };
+        } catch (error: any) {
+            throw error;
+        }
+    }
+
+    static async completeMfaLogin(tempToken: string, context: { ip: string; userAgent: string }) {
+        try {
+            const payload = jwt.verify(tempToken, envConfig.serverConfig.jwtSecret);
+            if ((payload as any).step !== 'awaiting_mfa') {
+                throw new UnauthorizedError('Invalid session');
+            }
+            const emailNormalized = (payload as any).email.toLowerCase();
+            const user = await prisma.user.findFirstOrThrow({
+                where: {
+                    emailNormalized
+                }
+            });
             await this.enforceSessionLimits(user);
             await this.revokeSameDeviceSession(user.id, context.userAgent);
             const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);

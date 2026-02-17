@@ -1,7 +1,7 @@
 // auth.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
-import { forgotPassword, login, logout, refreshToken, register, resetPassword, setup2FA, verify2FA } from "../controllers/auth.controller";
+import { forgotPassword, login, logout, refreshToken, register, resetPassword, setup2FA, verify2FA, verifyMfaLogin } from "../controllers/auth.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { loginRegisterRateLimit } from "../middlewares/rateLimit.middleware";
 
@@ -47,5 +47,6 @@ router.post('/refresh-token', [
 
 router.post('/2fa/setup', authenticate, setup2FA);
 router.post('/2fa/verify', authenticate, verify2FA);
+router.post('/2fa/verify-login', verifyMfaLogin);
 
 export default router;

@@ -68,7 +68,55 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         const { email, password } = req.body;
         const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
 
-        setAuthCookies(res, loginData.refreshToken, loginData.session.id);
+        if (loginData.requiresMfa) {
+            return res.status(200).json({
+                success: true,
+                loginData
+            });
+        } else {
+            setAuthCookies(res, loginData.refreshToken!, loginData.session?.id!);
+
+            logger.info('User logged in successfully', {
+                userId: loginData.user?.id,
+                sessionId: loginData.session?.id,
+                ip: req.ip,
+                device: req.headers['user-agent'] || 'unknown',
+            });
+
+            // Successful login
+            return res.status(200).json({
+                success: true,
+                message: 'Login successful',
+                data: {
+                    user: { userId: loginData.user?.id, email: loginData.user?.email },
+                    accessToken: loginData.accessToken,
+                    sessionId: loginData.session?.id
+                }
+            });
+        }
+
+
+    } catch (error: any) {
+        next(error);
+    }
+};
+
+export const verifyMfaLogin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const errors = validationResult(req);
+
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation errors',
+                data: errors.array()
+            });
+        }
+
+        const { tempToken } = req.body;
+        const loginData = await AuthService.completeMfaLogin(tempToken, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
+
+        setAuthCookies(res, loginData.refreshToken!, loginData.session?.id!);
 
         logger.info('User logged in successfully', {
             userId: loginData.user.id,
@@ -87,10 +135,12 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
                 sessionId: loginData.session.id
             }
         });
+
+
     } catch (error: any) {
         next(error);
     }
-};
+}
 
 /**
  * Logout user
@@ -259,6 +309,12 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
+/**
+ * Setting up 2-factoring authentication
+ * @param req 
+ * @param res 
+ * @param next 
+ */
 export const setup2FA = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = (req.user as any).userId;
@@ -295,6 +351,13 @@ export const setup2FA = async (req: Request, res: Response, next: NextFunction) 
     }
 };
 
+/**
+ * Verify 2-factoring authentication TOTP code
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const verify2FA = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { code } = req.body;
