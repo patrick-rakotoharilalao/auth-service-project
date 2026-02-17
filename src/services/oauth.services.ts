@@ -3,9 +3,11 @@ import prisma from "../lib/prisma";
 import { Profile } from "passport";
 import { AuthService } from "./auth.services";
 import { InternalServerError } from "../errors";
+import brcypt from 'bcrypt';
+import crypto from 'crypto';
 
 export class OAuthService {
-    static async authenticateWithOAuth (profile: Profile, accessToken: string, refreshToken: string) {
+    static async authenticateWithOAuth(profile: Profile, accessToken: string, refreshToken: string) {
         const email = profile.emails?.[0].value;
         let user = await prisma.user.findFirst({
             where: {
@@ -54,6 +56,33 @@ export class OAuthService {
             }
         });
         return loginData;
+
+    }
+
+    static async generateBackupCode(userId: string) {
+        const codes = [];
+        const saltRounds = process.env.BCRYPT_SALT_ROUNDS ? parseInt(process.env.BCRYPT_SALT_ROUNDS) : 10;
+
+        for (let i = 0; i < 10; i++) {
+            const original = crypto.randomBytes(4).toString('hex').toUpperCase();
+            const hashed = await brcypt.hash(original, saltRounds);
+            const printed = `${original.slice(0, 4)}-${original.slice(4, 8)}`;
+
+            await prisma.backupCode.create({
+                data: {
+                    userId: userId,
+                    codeHash: hashed,
+                }
+            });
+
+            codes.push({
+                original,
+                hashed,
+                printed
+            });
+        }
+
+        return codes;
 
     }
 }

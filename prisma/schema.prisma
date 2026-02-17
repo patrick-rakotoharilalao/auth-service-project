@@ -22,10 +22,11 @@ model User {
   mfaEnabled      Boolean          @default(false) @map("mfa_enabled")
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  mfaSecret       String?           @unique @map("mfa_secret")
+  mfaSecret       String?          @unique @map("mfa_secret")
   sessions        Session[]
   passwordResets  PasswordResets[]
   oauthAccounts   OAuthAccount[]
+  backupCodes     BackupCode[]
 
   @@map("users")
 }
@@ -70,4 +71,17 @@ model OAuthAccount {
   @@unique([provider, providerId])
   @@index([userId])
   @@map("oauth_accounts")
+}
+
+model BackupCode {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String   @map("code_hash")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@unique(codeHash)
+  @@map("backup_codes")
 }

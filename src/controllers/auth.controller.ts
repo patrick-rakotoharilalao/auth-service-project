@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import * as qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
+import { OAuthService } from '../services/oauth.services';
 
 /**
  *  Register a new user
@@ -262,10 +263,12 @@ export const setup2FA = async (req: Request, res: Response, next: NextFunction) 
     try {
         const userId = (req.user as any).userId;
         const email = (req.user as any).email;
-
+        const appName = 'AppName';
+        const emailEncoded = encodeURIComponent(email);
+        const appNameEncoded = encodeURIComponent(appName);
         // Générer le secret TOTP
         const secret = speakeasy.generateSecret({
-            name: `YourAppName:${email}`
+            name: `YourAppName:${emailEncoded}`
         });
 
         // Stocker en DB
@@ -275,8 +278,7 @@ export const setup2FA = async (req: Request, res: Response, next: NextFunction) 
         });
 
         // Créer l'URI TOTP
-        const appName = 'YourAppName';
-        const otpauth = `otpauth://totp/${appName}:${email}?secret=${secret.base32}&issuer=${appName}`;
+        const otpauth = `otpauth://totp/${appNameEncoded}:${emailEncoded}?secret=${secret.base32}&issuer=${appNameEncoded}`;
 
         // Générer le QR code en base64
         const qrCodeBase64 = await qrcode.toDataURL(otpauth);
@@ -314,15 +316,18 @@ export const verify2FA = async (req: Request, res: Response, next: NextFunction)
         }
 
         if (isValid) {
-            
+
             await prisma.user.update({
                 where: { id: user.id },
                 data: { mfaEnabled: true }
             });
 
+            const codes = await OAuthService.generateBackupCode(userId);
+
             return res.status(200).json({
                 success: true,
-                message: 'Multi-factoring authentication enabled successfully'
+                message: 'Multi-factoring authentication enabled successfully',
+                backupCodes: codes
             });
         } else {
             throw new UnauthorizedError('Invalid TOTP code');
