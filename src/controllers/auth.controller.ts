@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { envConfig } from '../config/env.config';
-import { BadRequestError, UnauthorizedError } from '../errors';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors';
 import { AuthService } from '../services/auth.services';
 import { setAuthCookies } from '../utils/cookie.utils';
 import logger from '../utils/logger';
@@ -292,3 +292,44 @@ export const setup2FA = async (req: Request, res: Response, next: NextFunction) 
         next(error);
     }
 };
+
+export const verify2FA = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { code } = req.body;
+        const userId = (req.user as any).userId;
+        let isValid = false;
+        const user = await prisma.user.findFirst({
+            where: { id: userId },
+        });
+        if (user && user.mfaSecret) {
+            isValid = speakeasy.totp.verify({
+                secret: user?.mfaSecret,
+                encoding: 'base32',
+                token: code,
+                window: 1
+            });
+
+        } else {
+            throw new NotFoundError('User not found');
+        }
+
+        if (isValid) {
+            
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { mfaEnabled: true }
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Multi-factoring authentication enabled successfully'
+            });
+        } else {
+            throw new UnauthorizedError('Invalid TOTP code');
+        }
+
+
+    } catch (error) {
+        next(error);
+    }
+}
