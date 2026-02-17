@@ -5,7 +5,10 @@ import { BadRequestError, UnauthorizedError } from '../errors';
 import { AuthService } from '../services/auth.services';
 import { setAuthCookies } from '../utils/cookie.utils';
 import logger from '../utils/logger';
-
+import crypto from 'crypto';
+import prisma from '../lib/prisma';
+import * as qrcode from 'qrcode';
+import speakeasy from 'speakeasy';
 
 /**
  *  Register a new user
@@ -181,6 +184,13 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     }
 };
 
+/**
+ * Reset User Password
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Validation des inputs
@@ -215,6 +225,13 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     }
 };
 
+/**
+ * Refresh User Token
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
 
@@ -241,3 +258,37 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
+export const setup2FA = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = (req.user as any).userId;
+        const email = (req.user as any).email;
+
+        // Générer le secret TOTP
+        const secret = speakeasy.generateSecret({
+            name: `YourAppName:${email}`
+        });
+
+        // Stocker en DB
+        await prisma.user.update({
+            where: { id: userId },
+            data: { mfaSecret: secret.base32 }
+        });
+
+        // Créer l'URI TOTP
+        const appName = 'YourAppName';
+        const otpauth = `otpauth://totp/${appName}:${email}?secret=${secret.base32}&issuer=${appName}`;
+
+        // Générer le QR code en base64
+        const qrCodeBase64 = await qrcode.toDataURL(otpauth);
+
+        res.json({
+            success: true,
+            secret,
+            otpauth,
+            qrCode: qrCodeBase64
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};

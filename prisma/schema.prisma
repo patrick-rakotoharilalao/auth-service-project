@@ -17,11 +17,12 @@ model User {
   id              String           @id @default(dbgenerated("gen_random_uuid()"))
   email           String           @unique
   emailNormalized String           @unique @map("email_normalized")
-  passwordHash    String?           @map("password_hash")
+  passwordHash    String?          @map("password_hash")
   emailVerified   Boolean          @default(false) @map("email_verified")
   mfaEnabled      Boolean          @default(false) @map("mfa_enabled")
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaSecret       String?           @unique @map("mfa_secret")
   sessions        Session[]
   passwordResets  PasswordResets[]
   oauthAccounts   OAuthAccount[]
