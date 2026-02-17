@@ -1,16 +1,16 @@
-import { User } from '@/generated/prisma/client';
+import { PasswordResets, User } from '@/generated/prisma/client';
+import { OAuthProfileInterface } from '@/interfaces/OAuthProfileInterface';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import speakeasy from 'speakeasy';
 import { envConfig, tokenConversions } from '../config/env.config';
+import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
 import prisma from '../lib/prisma';
 import logger from '../utils/logger';
 import { EmailService } from './email.service';
 import { redisService } from './redis.services';
-import { PasswordResets } from '@/generated/prisma/client';
-import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
-import { Profile } from 'passport';
-import { OAuthProfileInterface } from '@/interfaces/OAuthProfileInterface';
+import { BackupCode } from '@/generated/prisma/client';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -103,7 +103,7 @@ export class AuthService {
         }
     }
 
-    static async completeMfaLogin(tempToken: string, context: { ip: string; userAgent: string }) {
+    static async completeMfaLogin(tempToken: string, context: { ip: string; userAgent: string }, code: string) {
         try {
             const payload = jwt.verify(tempToken, envConfig.serverConfig.jwtSecret);
             if ((payload as any).step !== 'awaiting_mfa') {
@@ -115,6 +115,44 @@ export class AuthService {
                     emailNormalized
                 }
             });
+
+            const normalizedCode = code.replace(/-/g, '').toUpperCase();
+            let isValid = false;
+            if (normalizedCode.length === 6 && /^\d+$/.test(normalizedCode)) {
+                // Google Authenticator Code\
+                isValid = speakeasy.totp.verify({
+                    secret: user?.mfaSecret!,
+                    encoding: 'base32',
+                    token: code,
+                    window: 1
+                });
+
+            } else {
+                // ✅ Backup code
+                const codes = await prisma.backupCode.findMany({
+                    where: { userId: user.id, used: false}
+                });
+                for (const c of codes) {
+                    isValid = await bcrypt.compare(code, c.codeHash);
+                    
+                    if (isValid) {
+                        await prisma.backupCode.update({
+                            where: {
+                                id: c.id
+                            },
+                            data: {
+                                used: true
+                            }
+                        });
+                        break;
+                    }; 
+                }
+                
+            }
+
+            if (!isValid) {
+                throw new UnauthorizedError('Invalid code');
+            }
             await this.enforceSessionLimits(user);
             await this.revokeSameDeviceSession(user.id, context.userAgent);
             const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);

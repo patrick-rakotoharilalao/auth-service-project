@@ -119,8 +119,8 @@ export const verifyMfaLogin = async (req: Request, res: Response, next: NextFunc
             });
         }
 
-        const { tempToken } = req.body;
-        const loginData = await AuthService.completeMfaLogin(tempToken, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
+        const { tempToken, code } = req.body;
+        const loginData = await AuthService.completeMfaLogin(tempToken, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' }, code);
 
         setAuthCookies(res, loginData.refreshToken!, loginData.session?.id!);
 
