@@ -1,15 +1,14 @@
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import { envConfig } from '../config/env.config';
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors';
-import { AuthService } from '../services/auth.services';
-import { setAuthCookies } from '../utils/cookie.utils';
-import logger from '../utils/logger';
-import crypto from 'crypto';
-import prisma from '../lib/prisma';
 import * as qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
+import { envConfig } from '../config/env.config';
+import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors';
+import prisma from '../lib/prisma';
+import { AuthService } from '../services/auth.services';
 import { OAuthService } from '../services/oauth.services';
+import { setAuthCookies } from '../utils/cookie.utils';
+import logger from '../utils/logger';
 
 /**
  *  Register a new user
@@ -101,6 +100,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 };
 
+/**
+ * Second step of 2fa login
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const verifyMfaLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const errors = validationResult(req);
@@ -397,6 +403,33 @@ export const verify2FA = async (req: Request, res: Response, next: NextFunction)
         }
 
 
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const disable2FA = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Validate inputs
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            logger.warn('Validation errors', { errors: errors.array() });
+            return res.status(400).json({
+                success: false,
+                message: 'Validation errors',
+                data: errors.array()
+            });
+        }
+
+        const { password } = req.body;
+        const email = (req.user as any).email;
+
+        await AuthService.disable2Fa(email, password);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Multi-factoring authentication disabled successfully',
+        });
     } catch (error) {
         next(error);
     }

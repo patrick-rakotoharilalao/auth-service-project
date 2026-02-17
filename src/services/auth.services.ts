@@ -127,7 +127,7 @@ export class AuthService {
         }
     }
 
-    private static async verifyCredentials(email: string, password: string | null, loginMethod: 'credentials' | 'oauth'): Promise<User> {
+    private static async verifyCredentials(email: string, password: string | null, loginMethod: 'credentials' | 'oauth' = 'credentials'): Promise<User> {
 
         const emailNormalized = email.toLowerCase();
         // Attempt to find user by email
@@ -452,6 +452,27 @@ export class AuthService {
         );
 
         return newAccessToken;
+    }
+
+    static async disable2Fa(email: string, password: string) {
+        const user = await this.verifyCredentials(email, password);
+        // delete the TOTP code
+        await prisma.user.update({
+            where: {
+                emailNormalized: email.toLowerCase()
+            },
+            data: {
+                mfaEnabled: false,
+                mfaSecret: null
+            }
+        });
+
+        // delete all backup_codes for this user
+        await prisma.backupCode.deleteMany({
+            where: {
+                userId: user.id
+            },
+        });
     }
 
 }
