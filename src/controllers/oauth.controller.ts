@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
-import passport from '../config/passport.config';
-import logger from '../utils/logger';
-import { setAuthCookies } from '../utils/cookie.utils';
+import passport from '@/config/passport.config';
+import logger from '@/utils/logger';
+import { setAuthCookies } from '@/utils/cookie.utils';
 
 /**
  * Initiate Google OAuth authentication

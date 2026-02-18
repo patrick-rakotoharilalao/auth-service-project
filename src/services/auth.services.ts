@@ -4,13 +4,13 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import speakeasy from 'speakeasy';
-import { envConfig, tokenConversions } from '../config/env.config';
-import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
-import prisma from '../lib/prisma';
-import logger from '../utils/logger';
+import { envConfig, tokenConversions } from '@/config/env.config';
+import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '@/errors';
+import prisma from '@/lib/prisma';
+import { verifyCredentials } from '@/utils/auth.utils';
+import logger from '@/utils/logger';
 import { EmailService } from './email.service';
 import { redisService } from './redis.services';
-import { BackupCode } from '@/generated/prisma/client';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -75,7 +75,7 @@ export class AuthService {
 
     static async loginUser(email: string, password: string | null, context: { ip: string; userAgent: string }, loginMethod: 'credentials' | 'oauth' = 'credentials') {
         try {
-            const user = await this.verifyCredentials(email, password, loginMethod);
+            const user = await verifyCredentials(email, password, loginMethod);
 
             if (user.mfaEnabled) {
                 const tempToken = jwt.sign(
@@ -130,11 +130,11 @@ export class AuthService {
             } else {
                 // ✅ Backup code
                 const codes = await prisma.backupCode.findMany({
-                    where: { userId: user.id, used: false}
+                    where: { userId: user.id, used: false }
                 });
                 for (const c of codes) {
                     isValid = await bcrypt.compare(code, c.codeHash);
-                    
+
                     if (isValid) {
                         await prisma.backupCode.update({
                             where: {
@@ -145,9 +145,9 @@ export class AuthService {
                             }
                         });
                         break;
-                    }; 
+                    };
                 }
-                
+
             }
 
             if (!isValid) {
@@ -163,34 +163,6 @@ export class AuthService {
         } catch (error: any) {
             throw error;
         }
-    }
-
-    private static async verifyCredentials(email: string, password: string | null, loginMethod: 'credentials' | 'oauth' = 'credentials'): Promise<User> {
-
-        const emailNormalized = email.toLowerCase();
-        // Attempt to find user by email
-        const user = await prisma.user.findUnique({
-            where: { emailNormalized: emailNormalized }
-        });
-
-
-        if (!user) {
-            await bcrypt.compare('$2b$10$fakehashforconstanttimeleft', '$2b$10$fakehashforconstanttimeright'); // Hash factice
-            throw new UnauthorizedError('Invalid email or password')
-        }
-
-        if (loginMethod === 'oauth') {
-            return user;
-        }
-
-        // Compare hashed password
-        const isMatch = await bcrypt.compare(password!, user.passwordHash!);
-
-        if (!isMatch) {
-            throw new UnauthorizedError('Invalid email or password')
-        }
-
-        return user;
     }
 
     private static async enforceSessionLimits(user: User) {
@@ -296,7 +268,6 @@ export class AuthService {
 
         return accessToken;
     }
-
 
     static async revokingData(sessionId: string, accessToken: string, refreshToken: string) {
         // revoke access token
@@ -492,25 +463,6 @@ export class AuthService {
         return newAccessToken;
     }
 
-    static async disable2Fa(email: string, password: string) {
-        const user = await this.verifyCredentials(email, password);
-        // delete the TOTP code
-        await prisma.user.update({
-            where: {
-                emailNormalized: email.toLowerCase()
-            },
-            data: {
-                mfaEnabled: false,
-                mfaSecret: null
-            }
-        });
 
-        // delete all backup_codes for this user
-        await prisma.backupCode.deleteMany({
-            where: {
-                userId: user.id
-            },
-        });
-    }
 
 }

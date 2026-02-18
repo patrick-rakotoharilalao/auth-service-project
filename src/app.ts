@@ -8,6 +8,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import { otherRateLimit } from './middlewares/rateLimit.middleware';
 import authRoutes from './routes/auth.routes';
 import oauthRoutes from './routes/oauth.routes';
+import mfaRoutes from './routes/mfa.routes';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
 const app = express();
@@ -42,6 +43,7 @@ app.use(passport.initialize()); // Configure Passport
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', oauthRoutes);
+app.use('/api/auth', mfaRoutes);
 
 app.get('/health', async (req: Request, res: Response) => {
     try {

@@ -1,8 +1,8 @@
 import { OAuthProfileInterface } from "@/interfaces/OAuthProfileInterface";
-import prisma from "../lib/prisma";
+import prisma from "@/lib/prisma";
 import { Profile } from "passport";
 import { AuthService } from "./auth.services";
-import { InternalServerError } from "../errors";
+import { InternalServerError } from "@/errors";
 import brcypt from 'bcrypt';
 import crypto from 'crypto';
 

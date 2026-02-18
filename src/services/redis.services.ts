@@ -1,4 +1,4 @@
-import { redisConnection } from '../config/redis';
+import { redisConnection } from '@/config/redis';
 
 export class RedisService {
     private client = redisConnection.getClient();
