@@ -1,6 +1,6 @@
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { envConfig } from '../config/env.config';
+import { envConfig } from '@/config/env.config';
 
 const adapter = new PrismaPg({
   host: envConfig.dbConfig.host,

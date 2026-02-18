@@ -1,9 +1,9 @@
 // auth.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
-import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "../controllers/auth.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { loginRegisterRateLimit } from "../middlewares/rateLimit.middleware";
+import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "@/controllers/auth.controller";
+import { authenticate } from "@/middlewares/auth.middleware";
+import { loginRegisterRateLimit } from "@/middlewares/rateLimit.middleware";
 
 const router = Router();
 
@@ -44,7 +44,5 @@ router.post('/reset-password', [
 
 router.post('/refresh-token', [
 ], refreshToken);
-
-
 
 export default router;
