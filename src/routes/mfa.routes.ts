@@ -1,3 +1,4 @@
+// mfa.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
 import { disable2FA, setup2FA, verify2FA, verifyMfaLogin } from "@/controllers/mfa.controller";

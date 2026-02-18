@@ -1,3 +1,4 @@
+// oauth.routes.ts
 import { Router, Request, Response } from 'express';
 import passport from '@/config/passport.config';
 import { googleAuth, googleCallback } from '@/controllers/oauth.controller';

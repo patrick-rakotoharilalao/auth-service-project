@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import { envConfig } from '../config/env.config';
-import logger from '../utils/logger';
+import { envConfig } from '@/config/env.config';
+import logger from '@/utils/logger';
 
 /**
  * Email Service
