@@ -66,7 +66,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         if (loginData.requiresMfa) {
             return res.status(200).json({
                 success: true,
-                loginData
+                data: loginData
             });
         } else {
             setAuthCookies(res, loginData.refreshToken!, loginData.session?.id!);
