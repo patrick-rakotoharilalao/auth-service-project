@@ -444,21 +444,8 @@ export class AuthService {
             throw new InternalServerError('Invalid refresh token configuration');
         }
 
-        // Generate a new access token
-        const newPayload = {
-            userId: session.userId,
-            email: session.user.email,
-            sessionId: session.id
-        };
-
-        const newAccessToken = jwt.sign(
-            newPayload,
-            envConfig.serverConfig.jwtSecret,
-            {
-                expiresIn: envConfig.tokenConfig.accessTokenTTL,
-                algorithm: 'HS256'
-            }
-        );
+        // // Generate a new access token
+        const newAccessToken = this.generateAccessToken(session.user, sessionId);
 
         return newAccessToken;
     }
