@@ -255,7 +255,7 @@ export class AuthService {
 
     private static generateAccessToken(user: User, sessionId: string) {
 
-        const payload = { userId: user.id, email: user.email, sessionId: sessionId };
+        const payload = { userId: user.id, email: user.email, sessionId: sessionId, role: user.role };
 
         const accessToken = jwt.sign(
             payload,

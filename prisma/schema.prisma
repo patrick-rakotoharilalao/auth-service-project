@@ -13,6 +13,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id              String           @id @default(dbgenerated("gen_random_uuid()"))
   email           String           @unique
@@ -23,6 +28,7 @@ model User {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   mfaSecret       String?          @unique @map("mfa_secret")
+  role            Role             @default(USER)
   sessions        Session[]
   passwordResets  PasswordResets[]
   oauthAccounts   OAuthAccount[]
