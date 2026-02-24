@@ -1,4 +1,4 @@
-import { addUserToApp, createApplication, deleteApplication, getAllApplications, getApplicationById, getUsersByApp, regenerateApiKey, toggleActive, updateApplication } from "@/controllers/application.controller";
+import { addUserToApp, createApplication, deleteApplication, getAllApplications, getApplicationById, getUsersByApp, regenerateApiKey, removeUserFromApp, toggleActive, updateApplication } from "@/controllers/application.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { requireAdmin } from "@/middlewares/requireAdmin.middleware";
 import { Router } from "express";
@@ -46,5 +46,6 @@ router.post('/:id/users', [
     body('userId').notEmpty().withMessage('User ID is required'),
     body('role').optional().isIn(['admin', 'user', 'viewer']).withMessage('Invalid role')
 ], addUserToApp);
+router.delete('/:id/users/:userId', authenticate, requireAdmin, removeUserFromApp);
 
 export default router;

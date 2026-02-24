@@ -407,3 +407,39 @@ export const addUserToApp = async (req: Request, res: Response, next: NextFuncti
         next(error);
     }
 };
+
+export const removeUserFromApp = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const admin = req.user as any;
+        const { id, userId } = req.params;
+
+        const userAccess = await ApplicationService.removeUserFromApp(id, userId);
+
+        logger.info('User removed from application', {
+            applicationId: id,
+            userId: userAccess.userId,
+            userEmail: userAccess.user.email,
+            removedBy: admin.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'User removed from application successfully',
+            data: {
+                userId: userAccess.userId,
+                userEmail: userAccess.user.email,
+                applicationId: userAccess.applicationId
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error removing user from application', {
+            error: error.message,
+            applicationId: req.params.id,
+            userId: req.params.userId,
+            ip: req.ip
+        });
+        next(error);
+    }
+};

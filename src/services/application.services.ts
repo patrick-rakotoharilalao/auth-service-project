@@ -164,19 +164,19 @@ export class ApplicationService {
         const application = await prisma.application.findUnique({
             where: { id: appId }
         });
-    
+
         if (!application) {
             throw new NotFoundError('Application not found');
         }
-    
+
         const user = await prisma.user.findUnique({
             where: { id: userId }
         });
-    
+
         if (!user) {
             throw new NotFoundError('User not found');
         }
-    
+
         const existingAccess = await prisma.userAppAccess.findUnique({
             where: {
                 userId_applicationId: {
@@ -185,11 +185,11 @@ export class ApplicationService {
                 }
             }
         });
-    
+
         if (existingAccess) {
             throw new BadRequestError('User already has access to this application');
         }
-    
+
         const userAccess = await prisma.userAppAccess.create({
             data: {
                 userId,
@@ -202,6 +202,41 @@ export class ApplicationService {
                         id: true,
                         email: true
                     }
+                }
+            }
+        });
+
+        return userAccess;
+    }
+
+
+    static async removeUserFromApp(appId: string, userId: string) {
+        const userAccess = await prisma.userAppAccess.findUnique({
+            where: {
+                userId_applicationId: {
+                    userId,
+                    applicationId: appId
+                }
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true
+                    }
+                }
+            }
+        });
+    
+        if (!userAccess) {
+            throw new NotFoundError('User access not found');
+        }
+    
+        await prisma.userAppAccess.delete({
+            where: {
+                userId_applicationId: {
+                    userId,
+                    applicationId: appId
                 }
             }
         });
