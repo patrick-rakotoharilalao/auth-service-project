@@ -72,5 +72,41 @@ export class ApplicationService {
 
         return updatedApplication;
     }
+
+    static async regenerateApiKey(id: string) {
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+
+        if (!application) {
+            throw new NotFoundError('Application not found');
+        }
+
+        const newApiKey = this.generateApiKey();
+
+        const updatedApplication = await prisma.application.update({
+            where: { id },
+            data: { apiKey: newApiKey }
+        });
+
+        return updatedApplication;
+    }
+
+    static async toggleActive(id: string) {
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+
+        if (!application) {
+            throw new NotFoundError('Application not found');
+        }
+
+        const updatedApplication = await prisma.application.update({
+            where: { id },
+            data: { isActive: !application.isActive }
+        });
+
+        return updatedApplication;
+    }
 }
 

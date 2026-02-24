@@ -204,3 +204,74 @@ export const updateApplication = async (req: Request, res: Response, next: NextF
         next(error);
     }
 };
+
+export const regenerateApiKey = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user as any;
+        const { id } = req.params;
+
+        const application = await ApplicationService.regenerateApiKey(id);
+
+        logger.warn('API Key regenerated', {
+            applicationId: application.id,
+            applicationName: application.name,
+            regeneratedBy: user.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'API Key regenerated successfully. Save it now, it will not be shown again.',
+            data: {
+                id: application.id,
+                name: application.name,
+                apiKey: application.apiKey,
+                updatedAt: application.updatedAt
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error regenerating API Key', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};
+
+export const toggleActive = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user as any;
+        const { id } = req.params;
+
+        const application = await ApplicationService.toggleActive(id);
+
+        logger.info('Application status toggled', {
+            applicationId: application.id,
+            applicationName: application.name,
+            newStatus: application.isActive ? 'active' : 'inactive',
+            toggledBy: user.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Application ${application.isActive ? 'activated' : 'deactivated'} successfully`,
+            data: {
+                id: application.id,
+                name: application.name,
+                isActive: application.isActive,
+                updatedAt: application.updatedAt
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error toggling application status', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};

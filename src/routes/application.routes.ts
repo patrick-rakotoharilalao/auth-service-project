@@ -1,4 +1,4 @@
-import { createApplication, getAllApplications, getApplicationById, updateApplication } from "@/controllers/application.controller";
+import { createApplication, getAllApplications, getApplicationById, regenerateApiKey, toggleActive, updateApplication } from "@/controllers/application.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { requireAdmin } from "@/middlewares/requireAdmin.middleware";
 import { Router } from "express";
@@ -36,4 +36,7 @@ router.patch('/:id', [
     body('allowedOrigins').optional().isArray({ min: 1 }),
     body('webhookUrl').optional().isURL()
 ], updateApplication);
+router.post('/:id/regenerate-key', authenticate, requireAdmin, regenerateApiKey);
+router.patch('/:id/toggle', authenticate, requireAdmin, toggleActive);
+
 export default router;
