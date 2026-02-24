@@ -275,3 +275,79 @@ export const toggleActive = async (req: Request, res: Response, next: NextFuncti
         next(error);
     }
 };
+
+export const deleteApplication = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user as any;
+        const { id } = req.params;
+        const { force } = req.query;
+
+        const application = await ApplicationService.deleteApplication(
+            id,
+            force === 'true'
+        );
+
+        logger.warn('Application deleted', {
+            applicationId: application.id,
+            applicationName: application.name,
+            usersCount: application.users.length,
+            forced: force === 'true',
+            deletedBy: user.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Application deleted successfully',
+            data: {
+                id: application.id,
+                name: application.name
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error deleting application', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};
+
+
+export const getUsersByApp = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user as any;
+        const { id } = req.params;
+
+        const userAccess = await ApplicationService.getUsersByApp(id);
+
+        logger.info('Application users fetched', {
+            applicationId: id,
+            usersCount: userAccess.length,
+            requestedBy: user.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Application users retrieved successfully',
+            data: userAccess.map(access => ({
+                userId: access.user.id,
+                email: access.user.email,
+                role: access.role,
+                emailVerified: access.user.emailVerified,
+                userCreatedAt: access.user.createdAt
+            }))
+        });
+
+    } catch (error: any) {
+        logger.error('Error fetching application users', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};

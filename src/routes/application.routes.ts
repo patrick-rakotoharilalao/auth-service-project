@@ -1,4 +1,4 @@
-import { createApplication, getAllApplications, getApplicationById, regenerateApiKey, toggleActive, updateApplication } from "@/controllers/application.controller";
+import { createApplication, deleteApplication, getAllApplications, getApplicationById, getUsersByApp, regenerateApiKey, toggleActive, updateApplication } from "@/controllers/application.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { requireAdmin } from "@/middlewares/requireAdmin.middleware";
 import { Router } from "express";
@@ -38,5 +38,7 @@ router.patch('/:id', [
 ], updateApplication);
 router.post('/:id/regenerate-key', authenticate, requireAdmin, regenerateApiKey);
 router.patch('/:id/toggle', authenticate, requireAdmin, toggleActive);
+router.delete('/:id', authenticate, requireAdmin, deleteApplication);
+router.get('/:id/users', authenticate, requireAdmin, getUsersByApp);
 
 export default router;

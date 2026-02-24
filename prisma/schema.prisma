@@ -114,6 +114,7 @@ model UserAppAccess {
   userId        String
   applicationId String
   role          String?
+  addedAt       DateTime    @default(now()) @map("added_at")
   user          User        @relation(fields: [userId], references: [id])
   application   Application @relation(fields: [applicationId], references: [id])
 
