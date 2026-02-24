@@ -1,4 +1,4 @@
-import { createApplication, getAllApplications, getApplicationById } from "@/controllers/application.controller";
+import { createApplication, getAllApplications, getApplicationById, updateApplication } from "@/controllers/application.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { requireAdmin } from "@/middlewares/requireAdmin.middleware";
 import { Router } from "express";
@@ -28,5 +28,12 @@ router.post('/', [
 
 router.get('/', authenticate, requireAdmin, getAllApplications);
 router.get('/:id', authenticate, requireAdmin, getApplicationById);
-
+router.patch('/:id', [
+    authenticate,
+    requireAdmin,
+    body('name').optional().isLength({ min: 3, max: 100 }),
+    body('description').optional().isLength({ max: 500 }),
+    body('allowedOrigins').optional().isArray({ min: 1 }),
+    body('webhookUrl').optional().isURL()
+], updateApplication);
 export default router;

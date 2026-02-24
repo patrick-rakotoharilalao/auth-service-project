@@ -47,5 +47,30 @@ export class ApplicationService {
 
         return application;
     }
+
+    static async updateApplication(
+        id: string,
+        data: {
+            name?: string;
+            description?: string | null;
+            allowedOrigins?: string[];
+            webhookUrl?: string | null;
+        }
+    ) {
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+
+        if (!application) {
+            throw new NotFoundError('Application not found');
+        }
+
+        const updatedApplication = await prisma.application.update({
+            where: { id },
+            data
+        });
+
+        return updatedApplication;
+    }
 }
 

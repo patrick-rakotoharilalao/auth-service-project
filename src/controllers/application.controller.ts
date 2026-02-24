@@ -143,3 +143,64 @@ export const getApplicationById = async (req: Request, res: Response, next: Next
         next(error);
     }
 };
+
+export const updateApplication = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const errors = validationResult(req);
+        const user = req.user as any;
+        const { id } = req.params;
+
+        if (!errors.isEmpty()) {
+            logger.warn('Validation errors during application update', {
+                errors: errors.array(),
+                applicationId: id,
+                userId: user.userId,
+                ip: req.ip
+            });
+
+            return res.status(422).json({
+                success: false,
+                message: 'Validation errors',
+                data: errors.array()
+            });
+        }
+
+        const { name, description, allowedOrigins, webhookUrl } = req.body;
+
+        const updatedApplication = await ApplicationService.updateApplication(id, {
+            name,
+            description,
+            allowedOrigins,
+            webhookUrl
+        });
+
+        logger.info('Application updated successfully', {
+            applicationId: updatedApplication.id,
+            updatedBy: user.userId,
+            ip: req.ip
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Application updated successfully',
+            data: {
+                id: updatedApplication.id,
+                name: updatedApplication.name,
+                description: updatedApplication.description,
+                apiKey: maskApiKey(updatedApplication.apiKey),
+                allowedOrigins: updatedApplication.allowedOrigins,
+                webhookUrl: updatedApplication.webhookUrl,
+                isActive: updatedApplication.isActive,
+                updatedAt: updatedApplication.updatedAt
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error updating application', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};
