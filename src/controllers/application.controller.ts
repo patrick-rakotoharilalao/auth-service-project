@@ -351,3 +351,59 @@ export const getUsersByApp = async (req: Request, res: Response, next: NextFunct
         next(error);
     }
 };
+
+export const addUserToApp = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const errors = validationResult(req);
+        const admin = req.user as any;
+        const { id } = req.params;
+
+        if (!errors.isEmpty()) {
+            logger.warn('Validation errors during user addition to app', {
+                errors: errors.array(),
+                applicationId: id,
+                adminId: admin.userId,
+                ip: req.ip
+            });
+
+            return res.status(422).json({
+                success: false,
+                message: 'Validation errors',
+                data: errors.array()
+            });
+        }
+
+        const { userId, role } = req.body;
+
+        const userAccess = await ApplicationService.addUserToApp(id, userId, role);
+
+        logger.info('User added to application', {
+            applicationId: id,
+            userId: userAccess.userId,
+            userEmail: userAccess.user.email,
+            role: userAccess.role,
+            addedBy: admin.userId,
+            ip: req.ip
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'User added to application successfully',
+            data: {
+                userId: userAccess.userId,
+                userEmail: userAccess.user.email,
+                applicationId: userAccess.applicationId,
+                role: userAccess.role,
+                createdAt: userAccess.addedAt
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error adding user to application', {
+            error: error.message,
+            applicationId: req.params.id,
+            ip: req.ip
+        });
+        next(error);
+    }
+};

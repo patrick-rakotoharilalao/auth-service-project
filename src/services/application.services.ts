@@ -152,12 +152,61 @@ export class ApplicationService {
                 }
             }
         });
+
+        if (!application) {
+            throw new NotFoundError('Application not found');
+        }
+
+        return application.users;
+    }
+
+    static async addUserToApp(appId: string, userId: string, role: string = 'user') {
+        const application = await prisma.application.findUnique({
+            where: { id: appId }
+        });
     
         if (!application) {
             throw new NotFoundError('Application not found');
         }
     
-        return application.users;
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+    
+        if (!user) {
+            throw new NotFoundError('User not found');
+        }
+    
+        const existingAccess = await prisma.userAppAccess.findUnique({
+            where: {
+                userId_applicationId: {
+                    userId,
+                    applicationId: appId
+                }
+            }
+        });
+    
+        if (existingAccess) {
+            throw new BadRequestError('User already has access to this application');
+        }
+    
+        const userAccess = await prisma.userAppAccess.create({
+            data: {
+                userId,
+                applicationId: appId,
+                role
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true
+                    }
+                }
+            }
+        });
+    
+        return userAccess;
     }
 }
 

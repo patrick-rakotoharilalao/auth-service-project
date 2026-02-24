@@ -110,7 +110,7 @@ model Application {
 }
 
 model UserAppAccess {
-  id            String      @id
+  id            String      @id @default(dbgenerated("gen_random_uuid()"))
   userId        String
   applicationId String
   role          String?
