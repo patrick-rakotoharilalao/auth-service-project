@@ -1,3 +1,4 @@
+import { NotFoundError } from "@/errors";
 import prisma from "@/lib/prisma";
 import crypto from 'crypto';
 
@@ -6,21 +7,45 @@ export class ApplicationService {
         name: string, description: string | null = null,
         allowedOrigins: string[], webhookUrl: string) {
 
-            const apiKey = this.generateApiKey();
-            const newApplication = await prisma.application.create({
-                data: {
-                    name,
-                    description,
-                    allowedOrigins,
-                    webhookUrl,
-                    apiKey
-                }
-            });
+        const apiKey = this.generateApiKey();
+        const newApplication = await prisma.application.create({
+            data: {
+                name,
+                description,
+                allowedOrigins,
+                webhookUrl,
+                apiKey
+            }
+        });
 
-            return newApplication;
+        return newApplication;
     }
 
     private static generateApiKey(): string {
         return `app_${crypto.randomBytes(32).toString('hex')}`;
     }
+
+    static async getAllApplications(isActive?: boolean) {
+        const applications = await prisma.application.findMany({
+            where: isActive !== undefined ? { isActive } : {},
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        return applications;
+    }
+
+    static async getApplicationById(id: string) {
+        const application = await prisma.application.findUnique({
+            where: { id }
+        });
+
+        if (!application) {
+            throw new NotFoundError('Application not found');
+        }
+
+        return application;
+    }
 }
+

@@ -1,4 +1,4 @@
-import { createApplication } from "@/controllers/application.controller";
+import { createApplication, getAllApplications, getApplicationById } from "@/controllers/application.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { requireAdmin } from "@/middlewares/requireAdmin.middleware";
 import { Router } from "express";
@@ -25,5 +25,8 @@ router.post('/', [
         .isLength({ max: 500 }).withMessage('URL too long')
 
 ], createApplication);
+
+router.get('/', authenticate, requireAdmin, getAllApplications);
+router.get('/:id', authenticate, requireAdmin, getApplicationById);
 
 export default router;
