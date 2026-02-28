@@ -1,6 +1,6 @@
 # Auth as a Service (AaaS)
 
-A production-ready authentication service with multi-application support, OAuth 2.0, and 2FA/MFA capabilities.
+An authentication service with multi-application support, OAuth 2.0, and 2FA/MFA capabilities.
 
 Auth as a Service is a comprehensive authentication microservice that allows multiple applications to integrate secure user authentication through a centralized API. Built with Node.js, TypeScript, PostgreSQL and Redis, it provides enterprise-grade security features including multi-factor authentication, OAuth integration, and granular access control.
 
