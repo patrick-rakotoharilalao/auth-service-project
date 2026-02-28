@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import { TooManyRequestsError } from '../errors';
+import { TooManyRequestsError } from '@/errors';
 
 const loginRegisterRateLimit = rateLimit({
     windowMs: 60 * 1000,

@@ -1,11 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
-import { envConfig } from '../config/env.config';
-import { BadRequestError, UnauthorizedError } from '../errors';
-import { AuthService } from '../services/auth.services';
-import { setAuthCookies } from '../utils/cookie.utils';
-import logger from '../utils/logger';
-
+import { envConfig } from '@/config/env.config';
+import { BadRequestError, UnauthorizedError } from '@/errors';
+import { AuthService } from '@/services/auth.services';
+import { setAuthCookies } from '@/utils/cookie.utils';
+import logger from '@/utils/logger';
 
 /**
  *  Register a new user
@@ -62,27 +61,37 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         }
 
         const { email, password } = req.body;
-        const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' });
+        const appId = (req as any).application.id;
+        const loginData = await AuthService.loginUser(email, password, { ip: req.ip || 'localhost', userAgent: req.headers['user-agent'] || 'unknown' }, appId, 'credentials');
 
-        setAuthCookies(res, loginData.refreshToken, loginData.session.id);
+        if (loginData.requiresMfa) {
+            return res.status(200).json({
+                success: true,
+                data: loginData
+            });
+        } else {
+            setAuthCookies(res, loginData.refreshToken!, loginData.session?.id!);
 
-        logger.info('User logged in successfully', {
-            userId: loginData.user.id,
-            sessionId: loginData.session.id,
-            ip: req.ip,
-            device: req.headers['user-agent'] || 'unknown',
-        });
+            logger.info('User logged in successfully', {
+                userId: loginData.user?.id,
+                sessionId: loginData.session?.id,
+                ip: req.ip,
+                device: req.headers['user-agent'] || 'unknown',
+            });
 
-        // Successful login
-        return res.status(200).json({
-            success: true,
-            message: 'Login successful',
-            data: {
-                user: { userId: loginData.user.id, email: loginData.user.email },
-                accessToken: loginData.accessToken,
-                sessionId: loginData.session.id
-            }
-        });
+            // Successful login
+            return res.status(200).json({
+                success: true,
+                message: 'Login successful',
+                data: {
+                    user: { userId: loginData.user?.id, email: loginData.user?.email },
+                    accessToken: loginData.accessToken,
+                    sessionId: loginData.session?.id
+                }
+            });
+        }
+
+
     } catch (error: any) {
         next(error);
     }
@@ -181,6 +190,13 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     }
 };
 
+/**
+ * Reset User Password
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Validation des inputs
@@ -215,6 +231,13 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     }
 };
 
+/**
+ * Refresh User Token
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
 export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
 
@@ -240,4 +263,3 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
         next(error);
     }
 };
-

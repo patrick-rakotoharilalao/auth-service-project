@@ -1,5 +1,5 @@
-import { redisService } from "../services/redis.services";
-import logger from "../utils/logger";
+import { redisService } from "@/services/redis.services";
+import logger from "@/utils/logger";
 import { NextFunction, Request, Response } from "express";
 import jwt, { TokenExpiredError } from "jsonwebtoken";
 

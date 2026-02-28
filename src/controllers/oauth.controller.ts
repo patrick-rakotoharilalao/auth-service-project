@@ -1,17 +1,26 @@
 import { NextFunction, Request, Response } from 'express';
-import passport from '../config/passport.config';
-import logger from '../utils/logger';
-import { setAuthCookies } from '../utils/cookie.utils';
+import passport from '@/config/passport.config';
+import logger from '@/utils/logger';
+import { setAuthCookies } from '@/utils/cookie.utils';
 
 /**
  * Initiate Google OAuth authentication
  */
-export const googleAuth = passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    accessType: 'offline',
-    prompt: 'consent',
-    session: false,
-});
+export const googleAuth = (req: Request, res: Response, next: NextFunction) => {
+    const application = (req as any).application;
+
+    const state = Buffer.from(JSON.stringify({
+        apiKey: application.apiKey
+    })).toString('base64');
+
+    passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        accessType: 'offline',
+        prompt: 'consent',
+        session: false,
+        state
+    })(req, res, next);
+};
 
 /**
  * Handle Google OAuth callback
@@ -20,7 +29,6 @@ export const googleCallback = async (req: Request, res: Response, next: NextFunc
     try {
         // Redirect to frontend app
         const { loginData } = req.user as any;
-        console.log('session:', loginData);
         setAuthCookies(res, loginData.refreshToken, loginData.session.id);
         logger.info('User logged in successfully', {
             userId: loginData.user.id,

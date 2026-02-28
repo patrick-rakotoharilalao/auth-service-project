@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { envConfig, tokenConversions } from '../config/env.config';
+import { envConfig, tokenConversions } from '@/config/env.config';
 
 export const setAuthCookies = (res: Response, refreshToken: string, sessionId: string) => {
     const cookieOptions = {

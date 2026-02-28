@@ -13,18 +13,27 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id              String           @id @default(dbgenerated("gen_random_uuid()"))
   email           String           @unique
   emailNormalized String           @unique @map("email_normalized")
-  passwordHash    String?           @map("password_hash")
+  passwordHash    String?          @map("password_hash")
   emailVerified   Boolean          @default(false) @map("email_verified")
   mfaEnabled      Boolean          @default(false) @map("mfa_enabled")
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaSecret       String?          @unique @map("mfa_secret")
+  role            Role             @default(USER)
   sessions        Session[]
   passwordResets  PasswordResets[]
   oauthAccounts   OAuthAccount[]
+  backupCodes     BackupCode[]
+  userAppAccesses UserAppAccess[]
 
   @@map("users")
 }
@@ -69,4 +78,46 @@ model OAuthAccount {
   @@unique([provider, providerId])
   @@index([userId])
   @@map("oauth_accounts")
+}
+
+model BackupCode {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String   @map("code_hash")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique(codeHash)
+  @@index([userId])
+  @@map("backup_codes")
+}
+
+model Application {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  name           String
+  description    String?
+  apiKey         String   @unique @map("api_key")
+  allowedOrigins String[] @map("allowed_origins") // CORS
+  webhookUrl     String?  @map("webhook_url")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  users UserAppAccess[]
+
+  @@map("applications")
+}
+
+model UserAppAccess {
+  id            String      @id @default(dbgenerated("gen_random_uuid()"))
+  userId        String
+  applicationId String
+  role          String?
+  addedAt       DateTime    @default(now()) @map("added_at")
+  user          User        @relation(fields: [userId], references: [id])
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  @@unique([userId, applicationId])
+  @@map("user_app_access")
 }

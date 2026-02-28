@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import { envConfig } from '../config/env.config';
-import logger from '../utils/logger';
+import { envConfig } from '@/config/env.config';
+import logger from '@/utils/logger';
 
 /**
  * Email Service
@@ -119,12 +119,12 @@ export class EmailService {
             const info = await this.transporter.sendMail(mailOptions);
             logger.info('Password reset email sent successfully', {
                 to,
-                messageId: info.messageId,
+                // messageId: info.messageId,
             });
         } catch (error: any) {
             logger.error('Failed to send password reset email', {
                 to,
-                error: error.message,
+                error: error,
             });
             throw new Error(`Failed to send email: ${error.message}`);
         }

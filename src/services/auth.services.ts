@@ -1,16 +1,16 @@
-import { User } from '@/generated/prisma/client';
+import { PasswordResets, User } from '@/generated/prisma/client';
+import { OAuthProfileInterface } from '@/interfaces/OAuthProfileInterface';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { envConfig, tokenConversions } from '../config/env.config';
-import prisma from '../lib/prisma';
-import logger from '../utils/logger';
+import speakeasy from 'speakeasy';
+import { envConfig, tokenConversions } from '@/config/env.config';
+import { BadRequestError, ForbiddenError, InternalServerError, NotFoundError, UnauthorizedError } from '@/errors';
+import prisma from '@/lib/prisma';
+import { verifyCredentials } from '@/utils/auth.utils';
+import logger from '@/utils/logger';
 import { EmailService } from './email.service';
 import { redisService } from './redis.services';
-import { PasswordResets } from '@/generated/prisma/client';
-import { BadRequestError, InternalServerError, NotFoundError, UnauthorizedError } from '../errors';
-import { Profile } from 'passport';
-import { OAuthProfileInterface } from '@/interfaces/OAuthProfileInterface';
 
 const BLACKLISTED_ACCESS_TOKEN_TTL_HOURS = process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS ? parseInt(process.env.BLACKLISTED_ACCESS_TOKEN_TTL_HOURS) : 24;
 const BLACKLISTED_REFRESH_TOKEN_TTL_DAYS = process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS ? parseInt(process.env.BLACKLISTED_REFRESH_TOKEN_TTL_DAYS) : 30;
@@ -34,7 +34,7 @@ export class AuthService {
             where: { emailNormalized },
         });
 
-        if (existingUser) {
+        if (existingUser && existingUser.passwordHash) {
             throw new BadRequestError('Email already in use');
         }
 
@@ -45,8 +45,14 @@ export class AuthService {
             const hashedPassword = await bcrypt.hash(password!, saltRounds);
 
             // Create user in DB
-            newUser = await prisma.user.create({
-                data: {
+            newUser = await prisma.user.upsert({
+                where:{
+                    emailNormalized
+                },
+                update: {
+                    passwordHash: hashedPassword
+                },
+                create: {
                     email,
                     passwordHash: hashedPassword,
                     emailNormalized
@@ -73,9 +79,42 @@ export class AuthService {
         return newUser;
     }
 
-    static async loginUser(email: string, password: string | null, context: { ip: string; userAgent: string }, loginMethod: 'credentials' | 'oauth' = 'credentials') {
+    static async loginUser(
+        email: string,
+        password: string | null,
+        context: { ip: string; userAgent: string },
+        appId: string,
+        loginMethod: 'credentials' | 'oauth' = 'credentials'
+    ) {
         try {
-            const user = await this.verifyCredentials(email, password, loginMethod);
+            const user = await verifyCredentials(email, password, loginMethod);
+            const userAccess = await prisma.userAppAccess.findUnique({
+                where: {
+                    userId_applicationId: {
+                        userId: user.id,
+                        applicationId: appId
+                    }
+                }
+            });
+
+            if (!userAccess) {
+                throw new ForbiddenError('You do not have access to this application');
+            }
+
+            if (user.mfaEnabled) {
+                const tempToken = jwt.sign(
+                    { userId: user.id, email: email, step: 'awaiting_mfa' },
+                    envConfig.serverConfig.jwtSecret,
+                    { expiresIn: '5m' }
+                );
+                return {
+                    requiresMfa: true,
+                    userId: user.id,
+                    email: user.email,
+                    tempToken
+                };
+            }
+
             await this.enforceSessionLimits(user);
             await this.revokeSameDeviceSession(user.id, context.userAgent);
             const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);
@@ -88,32 +127,66 @@ export class AuthService {
         }
     }
 
-    private static async verifyCredentials(email: string, password: string | null, loginMethod: 'credentials' | 'oauth'): Promise<User> {
+    static async completeMfaLogin(tempToken: string, context: { ip: string; userAgent: string }, code: string) {
+        try {
+            const payload = jwt.verify(tempToken, envConfig.serverConfig.jwtSecret);
+            if ((payload as any).step !== 'awaiting_mfa') {
+                throw new UnauthorizedError('Invalid session');
+            }
+            const emailNormalized = (payload as any).email.toLowerCase();
+            const user = await prisma.user.findFirstOrThrow({
+                where: {
+                    emailNormalized
+                }
+            });
 
-        const emailNormalized = email.toLowerCase();
-        // Attempt to find user by email
-        const user = await prisma.user.findUnique({
-            where: { emailNormalized: emailNormalized }
-        });
+            const normalizedCode = code.replace(/-/g, '').toUpperCase();
+            let isValid = false;
+            if (normalizedCode.length === 6 && /^\d+$/.test(normalizedCode)) {
+                // Google Authenticator Code\
+                isValid = speakeasy.totp.verify({
+                    secret: user?.mfaSecret!,
+                    encoding: 'base32',
+                    token: code,
+                    window: 1
+                });
 
+            } else {
+                // ✅ Backup code
+                const codes = await prisma.backupCode.findMany({
+                    where: { userId: user.id, used: false }
+                });
+                for (const c of codes) {
+                    isValid = await bcrypt.compare(code, c.codeHash);
 
-        if (!user) {
-            await bcrypt.compare('$2b$10$fakehashforconstanttimeleft', '$2b$10$fakehashforconstanttimeright'); // Hash factice
-            throw new UnauthorizedError('Invalid email or password')
+                    if (isValid) {
+                        await prisma.backupCode.update({
+                            where: {
+                                id: c.id
+                            },
+                            data: {
+                                used: true
+                            }
+                        });
+                        break;
+                    };
+                }
+
+            }
+
+            if (!isValid) {
+                throw new UnauthorizedError('Invalid code');
+            }
+            await this.enforceSessionLimits(user);
+            await this.revokeSameDeviceSession(user.id, context.userAgent);
+            const { refreshToken, refreshTokenHash } = await this.issueRefreshToken(user, context.ip);
+            const session = await this.createSession(user.id, refreshTokenHash, context.userAgent);
+            const accessToken = this.generateAccessToken(user, session.id);
+
+            return { user, refreshToken, accessToken, session };
+        } catch (error: any) {
+            throw error;
         }
-
-        if (loginMethod === 'oauth') {
-            return user;
-        }
-
-        // Compare hashed password
-        const isMatch = await bcrypt.compare(password!, user.passwordHash!);
-
-        if (!isMatch) {
-            throw new UnauthorizedError('Invalid email or password')
-        }
-
-        return user;
     }
 
     private static async enforceSessionLimits(user: User) {
@@ -206,7 +279,7 @@ export class AuthService {
 
     private static generateAccessToken(user: User, sessionId: string) {
 
-        const payload = { userId: user.id, email: user.email, sessionId: sessionId };
+        const payload = { userId: user.id, email: user.email, sessionId: sessionId, role: user.role };
 
         const accessToken = jwt.sign(
             payload,
@@ -219,7 +292,6 @@ export class AuthService {
 
         return accessToken;
     }
-
 
     static async revokingData(sessionId: string, accessToken: string, refreshToken: string) {
         // revoke access token
@@ -307,7 +379,7 @@ export class AuthService {
             // In production, you might want to handle this differently
             logger.error('Failed to send password reset email', {
                 email: user.email,
-                error: error.message,
+                error: error,
             });
 
             throw new InternalServerError('Failed to send password reset email');
@@ -396,23 +468,12 @@ export class AuthService {
             throw new InternalServerError('Invalid refresh token configuration');
         }
 
-        // Generate a new access token
-        const newPayload = {
-            userId: session.userId,
-            email: session.user.email,
-            sessionId: session.id
-        };
-
-        const newAccessToken = jwt.sign(
-            newPayload,
-            envConfig.serverConfig.jwtSecret,
-            {
-                expiresIn: envConfig.tokenConfig.accessTokenTTL,
-                algorithm: 'HS256'
-            }
-        );
+        // // Generate a new access token
+        const newAccessToken = this.generateAccessToken(session.user, sessionId);
 
         return newAccessToken;
     }
+
+
 
 }

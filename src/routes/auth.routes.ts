@@ -1,9 +1,11 @@
 // auth.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
-import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "../controllers/auth.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { loginRegisterRateLimit } from "../middlewares/rateLimit.middleware";
+import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "@/controllers/auth.controller";
+import { authenticate } from "@/middlewares/auth.middleware";
+import { loginRegisterRateLimit } from "@/middlewares/rateLimit.middleware";
+import { verifyApplication } from "@/middlewares/verifyApplication.middleware";
+import { checkUserAppAccess } from "@/middlewares/checkUserAppAccess.middeware";
 
 const router = Router();
 
@@ -16,19 +18,21 @@ router.post('/register', [
         .matches(/[A-Z]/).withMessage('Password must contain an uppercase letter')
         .matches(/[a-z]/).withMessage('Password must contain a lowercase letter')
         .matches(/[@$!%*?&-_]/).withMessage('Password must contain a special character'),
+    verifyApplication
 ], register);
 
 router.post('/login', [
     loginRegisterRateLimit,
     body('email').isEmail().withMessage('Invalid email'),
     body('password').notEmpty().withMessage('Password is required'),
-    // rateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }) // to implement later
+    verifyApplication
 ], login);
 
-router.post('/logout', authenticate, logout);
+router.post('/logout', [authenticate, verifyApplication, checkUserAppAccess], logout);
 
 router.post('/forgot-password', [
-    body('email').isEmail().withMessage('Invalid email')
+    body('email').isEmail().withMessage('Invalid email'),
+    verifyApplication
 ], forgotPassword);
 
 router.post('/reset-password', [
@@ -40,11 +44,10 @@ router.post('/reset-password', [
         .matches(/[A-Z]/).withMessage('Password must contain an uppercase letter')
         .matches(/[a-z]/).withMessage('Password must contain a lowercase letter')
         .matches(/[@$!%*?&-_]/).withMessage('Password must contain a special character'),
+    verifyApplication
 ], resetPassword);
 
-router.post('/refresh-token', [
+router.post('/refresh-token', [verifyApplication
 ], refreshToken);
-
-
 
 export default router;

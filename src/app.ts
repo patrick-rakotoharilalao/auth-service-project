@@ -8,6 +8,8 @@ import { errorHandler } from './middlewares/errorHandler';
 import { otherRateLimit } from './middlewares/rateLimit.middleware';
 import authRoutes from './routes/auth.routes';
 import oauthRoutes from './routes/oauth.routes';
+import mfaRoutes from './routes/mfa.routes';
+import applicationRoutes from './routes/application.routes';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
 const app = express();
@@ -15,6 +17,8 @@ const app = express();
 // Initialize email service
 try {
     EmailService.initialize();
+    EmailService.verifyConnection();
+    console.log('Email service initialization done');
 } catch (error) {
     console.warn('Email service initialization failed. Email features will not work:', error);
 }
@@ -36,12 +40,13 @@ app.get("/", (req, res) => {
     res.send("Welcome to the Auth Service!");
 });
 
-
 // EXPLICATION : Initialisation de Passport
 app.use(passport.initialize()); // Configure Passport
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', oauthRoutes);
+app.use('/api/auth', mfaRoutes);
+app.use('/api/applications', applicationRoutes);
 
 app.get('/health', async (req: Request, res: Response) => {
     try {
