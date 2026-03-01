@@ -12,6 +12,8 @@ import mfaRoutes from './routes/mfa.routes';
 import applicationRoutes from './routes/application.routes';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.config';
 const app = express();
 
 // Initialize email service
@@ -36,11 +38,23 @@ app.use(cors({
 
 app.use(otherRateLimit);
 
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Auth as a Service - API Docs',
+}));
+
+// JSON spec endpoint
+app.get('/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+});
+
 app.get("/", (req, res) => {
     res.send("Welcome to the Auth Service!");
 });
 
-// EXPLICATION : Initialisation de Passport
+// Passport initialization
 app.use(passport.initialize()); // Configure Passport
 
 app.use('/api/auth', authRoutes);

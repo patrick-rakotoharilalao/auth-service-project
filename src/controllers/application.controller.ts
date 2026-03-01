@@ -4,6 +4,96 @@ import logger from '@/utils/logger';
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 
+/**
+ * @swagger
+ * /api/applications:
+ *   post:
+ *     summary: Create a new application (Admin only)
+ *     description: Creates a new application with API key generation. Admin automatically becomes owner with full access.
+ *     tags: [Applications]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - allowedOrigins
+ *               - webhookUrl
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Application name
+ *                 example: My App
+ *                 minLength: 1
+ *                 maxLength: 100
+ *               description:
+ *                 type: string
+ *                 description: Application description
+ *                 example: My application description
+ *                 maxLength: 500
+ *               allowedOrigins:
+ *                 type: array
+ *                 description: List of allowed CORS origins (no duplicates)
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 example: ["https://myapp.com", "https://admin.myapp.com"]
+ *               webhookUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: Webhook URL for event notifications
+ *                 example: https://myapp.com/webhooks
+ *                 maxLength: 500
+ *     responses:
+ *       201:
+ *         description: Application created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Application created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     apiKey:
+ *                       type: string
+ *                       description: Save this securely - it won't be shown again
+ *                     allowedOrigins:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     webhookUrl:
+ *                       type: string
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     owner:
+ *                       type: string
+ *                       description: Email of the application owner
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       422:
+ *         description: Validation error
+ */
 export const createApplication = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const errors = validationResult(req);
