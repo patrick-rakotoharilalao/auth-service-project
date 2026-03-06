@@ -111,8 +111,8 @@ model Application {
 
 model UserAppAccess {
   id            String      @id @default(dbgenerated("gen_random_uuid()"))
-  userId        String
-  applicationId String
+  userId        String      @map("user_id")
+  applicationId String      @map("application_id")
   role          String?
   addedAt       DateTime    @default(now()) @map("added_at")
   user          User        @relation(fields: [userId], references: [id])

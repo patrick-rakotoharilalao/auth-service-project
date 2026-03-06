@@ -15,7 +15,7 @@ import { redisService } from './services/redis.services';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.config';
 const app = express();
-
+import v1Router from './routes/v1';
 // Initialize email service
 try {
     EmailService.initialize();
@@ -57,10 +57,7 @@ app.get("/", (req, res) => {
 // Passport initialization
 app.use(passport.initialize()); // Configure Passport
 
-app.use('/api/auth', authRoutes);
-app.use('/api/auth', oauthRoutes);
-app.use('/api/auth', mfaRoutes);
-app.use('/api/applications', applicationRoutes);
+app.use('/api/v1', v1Router);
 
 app.get('/health', async (req: Request, res: Response) => {
     try {
