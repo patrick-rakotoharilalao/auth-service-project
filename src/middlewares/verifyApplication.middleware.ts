@@ -7,8 +7,7 @@ export const verifyApplication = async (req: Request, res: Response, next: NextF
     try {
         // Extract API Key from header
         const apiKey = req.headers['x-api-key'] as string;
-        console.log('apiKey', apiKey);
-
+        
         if (!apiKey) {
             logger.warn('Missing API Key', {
                 path: req.path,
