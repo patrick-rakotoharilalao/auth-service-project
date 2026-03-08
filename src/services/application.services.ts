@@ -25,12 +25,14 @@ export class ApplicationService {
         return `app_${crypto.randomBytes(32).toString('hex')}`;
     }
 
-    static async getAllApplications(isActive?: boolean) {
+    static async getAllApplications(isActive?: boolean, page?: number, limit?: number) {
         const applications = await prisma.application.findMany({
             where: isActive !== undefined ? { isActive } : {},
             orderBy: {
                 createdAt: 'desc'
-            }
+            },
+            skip: ((page ?? 1) - 1) * (limit ?? 10),
+            take: limit ?? 10
         });
 
         return applications;
@@ -134,11 +136,13 @@ export class ApplicationService {
         return application;
     }
 
-    static async getUsersByApp(appId: string) {
+    static async getUsersByApp(appId: string, page?: number, limit?: number) {
         const application = await prisma.application.findUnique({
             where: { id: appId },
             include: {
                 users: {
+                    skip: ((page ?? 1) - 1) * (limit ?? 10),
+                    take: limit ?? 10,
                     include: {
                         user: {
                             select: {

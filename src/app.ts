@@ -2,20 +2,16 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { Request, Response } from 'express';
+import swaggerUi from 'swagger-ui-express';
 import passport from './config/passport.config';
+import { swaggerSpec } from './config/swagger.config';
 import prisma from './lib/prisma';
 import { errorHandler } from './middlewares/errorHandler';
 import { otherRateLimit } from './middlewares/rateLimit.middleware';
-import authRoutes from './routes/auth.routes';
-import oauthRoutes from './routes/oauth.routes';
-import mfaRoutes from './routes/mfa.routes';
-import applicationRoutes from './routes/application.routes';
+import v1Router from './routes/v1';
 import { EmailService } from './services/email.service';
 import { redisService } from './services/redis.services';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.config';
 const app = express();
-import v1Router from './routes/v1';
 // Initialize email service
 try {
     EmailService.initialize();

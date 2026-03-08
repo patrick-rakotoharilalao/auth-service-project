@@ -272,24 +272,15 @@ router.post('/reset-password', [
  *   post:
  *     summary: Refresh access token
  *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - refreshToken
- *             properties:
- *               refreshToken:
- *                 type: string
+ *     security:
+ *       - ApiKeyAuth: []
  *     responses:
  *       200:
  *         description: Token refreshed
  *       401:
- *         description: Invalid refresh token
+ *         description: Invalid refresh token | Missing refresh token | Invalid API Key
  */
-router.post('/refresh-token', [verifyApplication
-], refreshToken);
+router.post('/refresh-token', verifyApplication
+    , refreshToken);
 
 export default router;

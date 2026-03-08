@@ -133,6 +133,18 @@ router.post('/',
  *           enum: [true, false]
  *         description: Filter by active status
  *         example: true
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: number
+ *         description: Page number
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *         description: Number of applications per page
+ *         example: 10
  *     responses:
  *       200:
  *         description: Applications retrieved successfully
@@ -175,6 +187,21 @@ router.post('/',
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 84
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 9
+ *                     currentPage:
+ *                       type: integer
+ *                       example: 1
+ *                     currentLimit:
+ *                       type: integer
+ *                       example: 10
  *       401:
  *         description: Unauthorized - Invalid or missing token
  *       403:
@@ -522,6 +549,18 @@ router.delete('/:id', authenticate, requireAdmin, deleteApplication);
  *         schema:
  *           type: string
  *         description: Application ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: number
+ *         description: Page number
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *         description: Number of users per page
+ *         example: 10
  *     responses:
  *       200:
  *         description: Application users retrieved successfully
@@ -554,6 +593,21 @@ router.delete('/:id', authenticate, requireAdmin, deleteApplication);
  *                       userCreatedAt:
  *                         type: string
  *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 20
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 2
+ *                     currentPage:
+ *                       type: integer
+ *                       example: 1
+ *                     currentLimit:
+ *                       type: integer
+ *                       example: 10
  *       401:
  *         description: Unauthorized
  *       403:
