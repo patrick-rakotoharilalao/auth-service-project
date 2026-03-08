@@ -49,6 +49,23 @@ Auth as a Service is a comprehensive authentication microservice that allows mul
 - 📋 Centralized error handling
 - 🔍 Environment variable validation at startup
 
+## API Versioning
+
+This API uses URL-based versioning. All endpoints are prefixed with the version number.
+
+### Current version
+- **v1** — Active, fully supported → `/api/v1/`
+
+### Versioning strategy
+- A new version is only created for **breaking changes** (response format changes, field removal, auth changes)
+- Non-breaking changes (new optional fields, bug fixes) are applied to the current version directly
+- Multiple versions can coexist — client applications migrate at their own pace
+
+### Endpoints base URLs
+| Version | Base URL | Status |
+|---|---|---|
+| v1 | `/api/v1` | ✅ Active |
+
 ## Tech & Stack
 
 ### Backend
@@ -118,21 +135,22 @@ Auth as a Service is a comprehensive authentication microservice that allows mul
 
 ### Authentication Flow
 1. Client requests login with credentials + x-api-key
-2. verifyApplication middleware validates API Key
-3. AuthService verifies credentials
-4. Check if user has access to the application
-5. If 2FA enabled → Return temp token
-6. User submits 2FA code
-7. Generate JWT access + refresh tokens
-8. Store session in PostgreSQL
-9. Return tokens to client
+2. Request is routed through /api/v1 versioned endpoint**
+3. verifyApplication middleware validates API Key
+4. AuthService verifies credentials
+5. Check if user has access to the application
+6. If 2FA enabled → Return temp token
+7. User submits 2FA code
+8. Generate JWT access + refresh tokens
+9. Store session in PostgreSQL
+10. Return tokens to client
 
 ### Multi-Application Architecture
 Each client application:
 
 - Has a unique API Key
 - Defines allowed origins (CORS)
-- Manages its own user access list
+- Manages its own user access list with paginations
 - Can be activated/deactivated independently
 
 ## Installation
@@ -191,4 +209,5 @@ npx prisma db seed
 npm run dev
 ```
 - The API will be available at http://localhost:3001
+- API v1 will be available at http://localhost:3001/api/v1**
 - Swagger documentation will be available at http://localhost:3001/api-docs
