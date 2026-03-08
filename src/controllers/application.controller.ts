@@ -70,16 +70,24 @@ export const createApplication = async (req: Request, res: Response, next: NextF
 export const getAllApplications = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user as any;
-        const { isActive } = req.query;
+        const { isActive, page, limit } = req.query;
 
         const applications = await ApplicationService.getAllApplications(
-            isActive === 'true' ? true : isActive === 'false' ? false : undefined
+            isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+            page ? parseInt(page as string) : undefined,
+            limit ? parseInt(limit as string) : undefined
         );
 
         logger.info('Applications fetched successfully', {
             count: applications.length,
             requestedBy: user.userId,
             filter: isActive ? `isActive=${isActive}` : 'none',
+            page: page ? parseInt(page as string) : undefined,
+            limit: limit ? parseInt(limit as string) : undefined,
+            total: applications.length,
+            totalPages: Math.ceil(applications.length / (limit ? parseInt(limit as string) : 10)),
+            currentPage: page ? parseInt(page as string) : 1,
+            currentLimit: limit ? parseInt(limit as string) : 10,
             ip: req.ip
         });
 
@@ -96,7 +104,13 @@ export const getAllApplications = async (req: Request, res: Response, next: Next
                 isActive: app.isActive,
                 createdAt: app.createdAt,
                 updatedAt: app.updatedAt
-            }))
+            })),
+            pagination: {
+                total: applications.length,
+                totalPages: Math.ceil(applications.length / (limit ? parseInt(limit as string) : 10)),
+                currentPage: page ? parseInt(page as string) : 1,
+                currentLimit: limit ? parseInt(limit as string) : 10
+            }
         });
 
     } catch (error: any) {
@@ -324,13 +338,20 @@ export const getUsersByApp = async (req: Request, res: Response, next: NextFunct
     try {
         const user = req.user as any;
         const { id } = req.params;
-
-        const userAccess = await ApplicationService.getUsersByApp(id);
+        const { page, limit } = req.query;
+        const userAccess = await ApplicationService.getUsersByApp(
+            id, page ? parseInt(page as string) : undefined, limit ? parseInt(limit as string) : undefined);
 
         logger.info('Application users fetched', {
             applicationId: id,
             usersCount: userAccess.length,
             requestedBy: user.userId,
+            page: page ? parseInt(page as string) : undefined,
+            limit: limit ? parseInt(limit as string) : undefined,
+            total: userAccess.length,
+            totalPages: Math.ceil(userAccess.length / (limit ? parseInt(limit as string) : 10)),
+            currentPage: page ? parseInt(page as string) : 1,
+            currentLimit: limit ? parseInt(limit as string) : 10,
             ip: req.ip
         });
 
@@ -343,7 +364,13 @@ export const getUsersByApp = async (req: Request, res: Response, next: NextFunct
                 role: access.role,
                 emailVerified: access.user.emailVerified,
                 userCreatedAt: access.user.createdAt
-            }))
+            })),
+            pagination: {
+                total: userAccess.length,
+                totalPages: Math.ceil(userAccess.length / (limit ? parseInt(limit as string) : 10)),
+                currentPage: page ? parseInt(page as string) : 1,
+                currentLimit: limit ? parseInt(limit as string) : 10
+            }
         });
 
     } catch (error: any) {
