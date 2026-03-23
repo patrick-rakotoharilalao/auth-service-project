@@ -211,3 +211,75 @@ npm run dev
 - The API will be available at http://localhost:3001
 - API v1 will be available at http://localhost:3001/api/v1**
 - Swagger documentation will be available at http://localhost:3001/api-docs
+
+## Run with Docker
+
+### Prerequisites
+- Docker
+- Docker Compose plugin (`docker compose`)
+
+### 1 - Prepare environment variables
+Create `.env` from the example and set required values:
+```
+cp .env.example .env
+```
+
+Required values for Docker startup:
+- `JWT_SECRET`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+### 2 - Build containers
+```
+docker compose build --no-cache
+```
+
+### 3 - Start the stack
+```
+docker compose up
+```
+
+Services started by Compose:
+- `app` (Node.js API)
+- `db` (PostgreSQL 16)
+- `redis` (Redis 7)
+
+Default ports:
+- API: `http://localhost:3001`
+- Swagger: `http://localhost:3001/api-docs`
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+
+### 4 - Database migrations and seed in Docker
+On container startup, if `RUN_MIGRATIONS=true`:
+- `prisma migrate deploy` is executed
+- `prisma db seed` is executed
+
+This is handled automatically by `docker-entrypoint.sh`.
+
+### Useful Docker commands
+```
+# Start in detached mode
+docker compose up -d
+
+# View logs
+docker compose logs -f app
+
+# Restart only API container
+docker compose restart app
+
+# Stop and remove containers
+docker compose down
+
+# Stop and remove containers + database volume
+docker compose down -v
+```
+
+### Notes
+- If you update Docker-related files (`Dockerfile`, `docker-entrypoint.sh`, Prisma config), rebuild the image:
+```
+docker compose build --no-cache app
+```
+- If Swagger appears empty in Docker, rebuild and restart the app container so generated docs are read from `dist`.
