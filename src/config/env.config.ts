@@ -45,7 +45,7 @@ export const envConfig = {
         port: getNumber('DB_PORT', 5432),
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'password',
-        database: process.env.DB_NAME || 'auth_db',
+        database: process.env.DB_NAME || 'auth_service_api',
     },
 
     serverConfig: {

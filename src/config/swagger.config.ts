@@ -1,4 +1,13 @@
+import fs from 'fs';
+import path from 'path';
 import swaggerJsdoc from 'swagger-jsdoc';
+
+/** In Docker / production only compiled JS is present; swagger-jsdoc must scan dist/. */
+const swaggerApiGlobs = fs.existsSync(
+    path.join(process.cwd(), 'src', 'routes', 'v1', 'auth.routes.ts'),
+)
+    ? ['./src/routes/v1/*.ts', './src/controllers/*.ts']
+    : ['./dist/routes/v1/*.js', './dist/controllers/*.js'];
 
 const options: swaggerJsdoc.Options = {
     definition: {
@@ -35,7 +44,7 @@ const options: swaggerJsdoc.Options = {
             },
         },
     },
-    apis: ['./src/routes/v1/*.ts', './src/controllers/*.ts'],
+    apis: swaggerApiGlobs,
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
