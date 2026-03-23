@@ -6,5 +6,5 @@
         "src/**/*.spec.ts"
     ],
     "ext": "ts, html, css, ejs, json",
-    "exec": "ts-node ./src/server.ts"
+    "exec": "ts-node -r tsconfig-paths/register ./src/server.ts"
 }
