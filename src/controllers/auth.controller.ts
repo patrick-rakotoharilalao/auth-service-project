@@ -53,7 +53,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         const errors = validationResult(req);
 
         if (!errors.isEmpty()) {
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 data: errors.array()
@@ -165,7 +165,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.warn('Validation errors during forgot password', { errors: errors.array() });
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 data: errors.array()
@@ -203,7 +203,7 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.warn('Validation errors during password reset', { errors: errors.array() });
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 errors: errors.array()

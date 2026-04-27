@@ -118,7 +118,7 @@ export const disable2FA = async (req: Request, res: Response, next: NextFunction
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.warn('Validation errors', { errors: errors.array() });
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 data: errors.array()
@@ -151,7 +151,7 @@ export const verifyMfaLogin = async (req: Request, res: Response, next: NextFunc
         const errors = validationResult(req);
 
         if (!errors.isEmpty()) {
-            return res.status(400).json({
+            return res.status(422).json({
                 success: false,
                 message: 'Validation errors',
                 data: errors.array()
