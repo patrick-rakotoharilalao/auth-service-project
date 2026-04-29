@@ -263,3 +263,33 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
         next(error);
     }
 };
+
+/**
+ * Verify access token (called by external services)
+ * @param req
+ * @param res
+ */
+export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = (req as any).user;
+
+        if (!user) {
+            throw new UnauthorizedError('Invalid token');
+        }
+
+        logger.info('Token verified successfully', { userId: user.id });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                sub: user.id,
+                email: user.email,
+                role: user.role,
+                sessionId: user.sessionId,
+            }
+        });
+
+    } catch (error: any) {
+        next(error);
+    }
+};

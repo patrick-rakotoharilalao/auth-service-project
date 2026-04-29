@@ -1,7 +1,7 @@
 // auth.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
-import { forgotPassword, login, logout, refreshToken, register, resetPassword } from "@/controllers/auth.controller";
+import { forgotPassword, login, logout, refreshToken, register, resetPassword, verifyToken } from "@/controllers/auth.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { loginRegisterRateLimit } from "@/middlewares/rateLimit.middleware";
 import { verifyApplication } from "@/middlewares/verifyApplication.middleware";
@@ -282,5 +282,46 @@ router.post('/reset-password', [
  */
 router.post('/refresh-token', verifyApplication
     , refreshToken);
+
+/**
+ * @swagger
+ * /auth/verify:
+ *   post:
+ *     summary: Verify access token validity
+ *     description: Called by external services (e.g. Laravel) to validate a JWT
+ *     tags: [Authentication]
+ *     security:
+ *       - ApiKeyAuth: []
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Token is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     sub:
+ *                       type: string
+ *                       example: uuid-1234
+ *                     email:
+ *                       type: string
+ *                       example: user@example.com
+ *                     role:
+ *                       type: string
+ *                       example: user
+ *                     sessionId:
+ *                       type: string
+ *                       example: session-uuid
+ *       401:
+ *         description: Invalid or expired token
+ */
+router.post('/verify', [authenticate, verifyApplication], verifyToken);
 
 export default router;
