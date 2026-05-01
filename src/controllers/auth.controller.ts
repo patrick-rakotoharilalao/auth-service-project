@@ -277,12 +277,12 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
             throw new UnauthorizedError('Invalid token');
         }
 
-        logger.info('Token verified successfully', { userId: user.id });
+        logger.info('Token verified successfully', { userId: user.userId });
 
         return res.status(200).json({
             success: true,
             data: {
-                sub: user.id,
+                sub: user.userId,
                 email: user.email,
                 role: user.role,
                 sessionId: user.sessionId,
