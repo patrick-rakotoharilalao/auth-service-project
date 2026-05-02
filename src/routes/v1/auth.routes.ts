@@ -1,7 +1,7 @@
 // auth.routes.ts
 import { Router } from "express";
 import { body } from "express-validator";
-import { forgotPassword, login, logout, refreshToken, register, resetPassword, verifyToken } from "@/controllers/auth.controller";
+import { forgotPassword, grantAppAccess, login, logout, refreshToken, register, resetPassword, verifyToken } from "@/controllers/auth.controller";
 import { authenticate } from "@/middlewares/auth.middleware";
 import { loginRegisterRateLimit } from "@/middlewares/rateLimit.middleware";
 import { verifyApplication } from "@/middlewares/verifyApplication.middleware";
@@ -323,5 +323,10 @@ router.post('/refresh-token', verifyApplication
  *         description: Invalid or expired token
  */
 router.post('/verify', [authenticate, verifyApplication], verifyToken);
+
+router.post('/grant-access', [
+    verifyApplication,
+    body('userId').notEmpty().withMessage('userId is required'),
+], grantAppAccess);
 
 export default router;

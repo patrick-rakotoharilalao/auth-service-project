@@ -5,6 +5,7 @@ import { BadRequestError, UnauthorizedError } from '@/errors';
 import { AuthService } from '@/services/auth.services';
 import { setAuthCookies } from '@/utils/cookie.utils';
 import logger from '@/utils/logger';
+import { ApplicationService } from '@/services/application.services';
 
 /**
  *  Register a new user
@@ -290,6 +291,62 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         });
 
     } catch (error: any) {
+        next(error);
+    }
+};
+
+export const grantAppAccess = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const errors = validationResult(req);
+
+        if (!errors.isEmpty()) {
+            logger.warn('Validation errors during app access grant', {
+                errors: errors.array(),
+                ip: req.ip
+            });
+
+            return res.status(422).json({
+                success: false,
+                message: 'Validation errors',
+                data: errors.array()
+            });
+        }
+
+        const { userId } = req.body;
+        const application = (req as any).application;
+
+        const userAccess = await ApplicationService.addUserToApp(
+            application.id,
+            userId
+        );
+
+        logger.info('App access granted to user', {
+            applicationId: application.id,
+            applicationName: application.name,
+            userId: userAccess.userId,
+            userEmail: userAccess.user.email,
+            ip: req.ip
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'App access granted successfully',
+            data: {
+                userId: userAccess.userId,
+                userEmail: userAccess.user.email,
+                applicationId: userAccess.applicationId,
+                role: userAccess.role,
+                createdAt: userAccess.addedAt
+            }
+        });
+
+    } catch (error: any) {
+        logger.error('Error granting app access', {
+            error: error.message,
+            stack: error.stack,
+            userId: req.body.userId,
+            ip: req.ip
+        });
         next(error);
     }
 };
